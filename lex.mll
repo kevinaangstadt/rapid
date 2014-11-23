@@ -48,12 +48,12 @@ rule initial = parse
     
     | ("0x")?['0'-'9']+ {
         let str = Lexing.lexeme lexbuf in
-            TINT((int_of_string str))
+            INT((int_of_string str))
     }
     
     | ['A'-'Z''a'-'z''_']['0'-'9''A'-'Z''a'-'z''_']* {
         let str = Lexing.lexeme lexbuf in 
-            TIDENT(str)
+            IDENT(str)
     }
     
     | eof       { EOF }
