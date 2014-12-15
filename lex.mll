@@ -21,14 +21,17 @@ rule initial = parse
     | '{'       { TLBRACE }
     | '}'       { TRBRACE }
     
+    | "string"  { TSTRING }
     | "int"     { TINT }
     | "Counter" { TCOUNTER }
     | "macro"   { TMACRO }
     | "Network" { TNETWORK }
     | "report"  { TREPORT }
     | "filter"  { TFILTER }
+    | "input()" { TINPUT }
     
     | "="       { TASSIGN }
+    | '-'       { TMINUS }
     
     | "=="      { TEQ }
     | "!="      { TNEQ }
@@ -40,10 +43,12 @@ rule initial = parse
     | "||"      { TOR }
     | '!'       { TNOT }
     
+    | "true"    { TRUE }
+    | "false"   { FALSE }
+    
     | "foreach" { TFOREACH }
     | "while"   { TWHILE }
     | "if"      { TIF }
-    | "then"    { TTHEN }
     | "else"    { TELSE }
     
     | ("0x")?['0'-'9']+ {
