@@ -3,9 +3,14 @@
  * Abstract Syntax for AP Language
  *)
 
-type input_variable =
-    | Int of int
+type literal =
     | String of string
+    | Int of int
+    | Char of char
+    | True
+    | False
+
+type variable = Var of string * literal
     
 type args = Args of input_variable list
 
@@ -23,9 +28,10 @@ type expression =
 
 type statement =
     | Report
+    | Block of statement_list
     | IF of expression * statement * statement
     
 type statement_list = Statements of statement list
 
-type macro = Macro of args * block
+type macro = Macro of string * args * block
 
