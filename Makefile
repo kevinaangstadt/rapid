@@ -9,19 +9,27 @@ OCAMLLEX  = ocamllex
 
 all: language
 
+LANG_OBJS = \
+	language.cmx \
+	parse.cmx \
+	lex.cmx
+
 clean: 
-    $(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli langugage language.exe
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli langugage language.exe
 
 %.cmi: %.mli
-    $(OCAMLOPT) -c $<
+	$(OCAMLOPT) -c $<
 
 %.cmx: %.ml 
-    $(OCAMLOPT) -c $<
+	$(OCAMLOPT) -c $<
 
 %.ml %.mli: %.mly
-    $(OCAMLYACC) $< 
+	$(OCAMLYACC) $< 
 
 %.ml: %.mll
-    $(OCAMLLEX) $<
+	$(OCAMLLEX) $<
+	
+language: $(LANG_OBJS)
+	$(OCAMLOPT) -o imp $(LANG_OBJS)
 
 parse.cmx: parse.cmi parse.ml

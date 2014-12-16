@@ -2,17 +2,22 @@
  * Kevin Angstadt
  * Abstract Syntax for AP Language
  *)
+ 
+type typ =
+    | String
+    | Int
+    | Char
 
 type literal =
-    | String of string
-    | Int of int
-    | Char of char
+    | StringLit of string * typ
+    | IntLit of int * typ
+    | CharLit of char * typ
     | True
     | False
 
-type variable = Var of string * literal
+type variable = Var of string * typ
     
-type args = Args of input_variable list
+type args = Args of variable list
 
 type expression =
     | EQ of expression * expression                     (* a0 == a1 *)
@@ -26,12 +31,11 @@ type expression =
     | And of expression * expression                    (* b0 && b1 *) 
     | Or of expression * expression                     (* b0 || b1 *) 
 
-type statement =
+type statement_list = Statements of statement list
+and statement =
     | Report
     | Block of statement_list
     | IF of expression * statement * statement
-    
-type statement_list = Statements of statement list
 
-type macro = Macro of string * args * block
+type macro = Macro of string * args * statement_list
 

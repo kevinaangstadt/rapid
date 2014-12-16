@@ -51,6 +51,7 @@
 %left TEQ TNEQ
 %left TLEQ TGEQ TLT TGT
 %nonassoc TNOT UMINUS
+%right TTHEN TELSE
 
 %start macro
 %type<Language.macro> macro
@@ -61,8 +62,10 @@ macro:
       TMACRO IDENT TLPAREN args TRPAREN block EOF { Macro($2,$4,$6) }
 ;
 
+void: { } ;
+
 args:
-      { Args([]) }
+      void { Args( [] ) }
     | arg_list { Args($1) }
 ;
 
@@ -72,8 +75,8 @@ arg_list:
 ;
 
 input_variable:
-      TINT IDENT { Var($2, Int() }
-    | TSTRING IDENT { Var($2, String() ) }
+      TINT IDENT { Var($2, Int) }
+    | TSTRING IDENT { Var($2, String ) }
 ;
 
 block:
@@ -81,8 +84,8 @@ block:
 ;
 
 statement_list:
-      { []Ê}
-    | statement TCOMMA statement_list { $1 :: $3 }
+      statement_list TCOMMA statement { Statements($1 @ [$3]) }
+    | statement { Statments([]) }
 ;
 
 statement:
@@ -92,7 +95,7 @@ statement:
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement { IF($3,$5) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5) }
     | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7) }
 ;
 
@@ -116,7 +119,7 @@ operand:
 ;
 
 literal:
-      INT { Int($1) }
+      INT { IntLit($1,String) }
     | TRUE { True }
     | FALSE { False }
 ;
