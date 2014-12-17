@@ -21,7 +21,7 @@ rule initial = parse
     | '{'       { TLBRACE }
     | '}'       { TRBRACE }
     
-    | "string"  { TSTRING }
+    | "String"  { TSTRING }
     | "int"     { TINT }
     | "Counter" { TCOUNTER }
     | "macro"   { TMACRO }
@@ -64,6 +64,7 @@ rule initial = parse
     | eof       { EOF }
     | _         {
         Printf.printf "invalid character '%s'\n" (Lexing.lexeme lexbuf) ;
+        exit 1 (*FIXME Nice error handling needed here*)
     }
 
 and comment = parse

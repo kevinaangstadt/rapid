@@ -16,7 +16,7 @@ LANG_OBJS = \
 	main.cmx
 
 clean: 
-	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli langugage language.exe
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe
 
 %.cmi: %.mli
 	$(OCAMLOPT) -c $<
@@ -31,7 +31,7 @@ clean:
 	$(OCAMLLEX) $<
 	
 language: $(LANG_OBJS)
-	$(OCAMLOPT) -o imp $(LANG_OBJS)
+	$(OCAMLOPT) -o language $(LANG_OBJS)
 
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

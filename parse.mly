@@ -75,27 +75,27 @@ arg_list:
 ;
 
 input_variable:
-      TINT IDENT { Var($2, Int) }
-    | TSTRING IDENT { Var($2, String ) }
+      TINT IDENT { VarDec($2, Int) }
+    | TSTRING IDENT { VarDec($2, String ) }
 ;
 
 block:
-      TLBRACE statement_list TRBRACE { Statements($2) }
+      TLBRACE statement_list TRBRACE { Block($2) }
 ;
 
 statement_list:
-      statement_list TCOMMA statement { $1 @ [$3] }
-    | statement { [] }
+      statement_list statement { $1 @ [$2] }
+    | statement { [$1] }
 ;
 
 statement:
       if_statement { $1 }
-    | block { Block($1) }
+    | block { $1 }
     | TREPORT TSEMICOLON { Report }
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block()) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block([])) }
     | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7) }
 ;
 
@@ -109,17 +109,18 @@ expression:
     | expression TGT expression     { GT($1,$3) }
     | expression TLT expression     { LT($1,$3) }
     | TNOT operand                  { Not($2) }
-    | TMINUS operand %prec UMINUS   { Negative($2) } 
+    | TMINUS operand %prec UMINUS   { Negative($2) }
+    | operand                       { $1 }
 ;
 
 operand:
-      literal { $1 }
+      literal { Lit($1) }
     | IDENT { Var($1) }
     | TLPAREN expression TRPAREN { $2 }
 ;
 
 literal:
-      INT { IntLit($1,String) }
+      INT { IntLit($1,Int) }
     | TRUE { True }
     | FALSE { False }
 ;

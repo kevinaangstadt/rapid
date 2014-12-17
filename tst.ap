@@ -1,0 +1,7 @@
+macro hamming (String s, int d) {
+    if(s) {
+        report;
+    } else {
+        report;
+    }
+}
