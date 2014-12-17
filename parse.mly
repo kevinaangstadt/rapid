@@ -4,7 +4,7 @@
  * Parser for AP Language
  *)
  
- open Langugage
+ open Language
 %}
 
 %token <int>    INT
@@ -80,22 +80,22 @@ input_variable:
 ;
 
 block:
-      TLBRACE statement_list TRBRACE { Block($2) }
+      TLBRACE statement_list TRBRACE { Statements($2) }
 ;
 
 statement_list:
-      statement_list TCOMMA statement { Statements($1 @ [$3]) }
-    | statement { Statments([]) }
+      statement_list TCOMMA statement { $1 @ [$3] }
+    | statement { [] }
 ;
 
 statement:
       if_statement { $1 }
-    | block { $1 }
+    | block { Block($1) }
     | TREPORT TSEMICOLON { Report }
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block()) }
     | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7) }
 ;
 
