@@ -23,12 +23,13 @@ rule initial = parse
     
     | "String"  { TSTRING }
     | "int"     { TINT }
+    | "char"    { TCHAR }
     | "Counter" { TCOUNTER }
     | "macro"   { TMACRO }
     | "Network" { TNETWORK }
     | "report"  { TREPORT }
     | "filter"  { TFILTER }
-    | "input()" { TINPUT }
+    | "foreach" { TFOREACH }
     
     | "="       { TASSIGN }
     | '-'       { TMINUS }

@@ -22,12 +22,13 @@
 %token	TRBRACE
 %token	TINT
 %token  TSTRING
+%token  TCHAR
 %token	TCOUNTER
 %token	TMACRO
 %token	TNETWORK
 %token	TREPORT
 %token	TFILTER
-%token  TINPUT
+%token  TFOREACH
 %token  TMINUS
 %token	TASSIGN
 %token	TEQ
@@ -59,24 +60,35 @@
 %%
 
 macro:
-      TMACRO IDENT TLPAREN args TRPAREN block EOF { Macro($2,$4,$6) }
+      TMACRO IDENT TLPAREN params TRPAREN block EOF { Macro($2,$4,$6) }
 ;
 
 void: { } ;
 
+params:
+      void { Parameters( [] ) }
+    | param_list { Parameters($1) }
+;
+
+param_list:
+      input_variable { [$1] }
+    | input_variable TCOMMA param_list { $1 :: $3 }
+;
+
 args:
-      void { Args( [] ) }
-    | arg_list { Args($1) }
+      void { Arguments( [] ) }
+    | arg_list { Arguments($1) }
 ;
 
 arg_list:
-      input_variable { [$1] }
-    | input_variable TCOMMA arg_list { $1 :: $3 }
+      operand { [$1] }
+    | operand TCOMMA arg_list { $1 :: $3 }
 ;
 
 input_variable:
-      TINT IDENT { VarDec($2, Int) }
-    | TSTRING IDENT { VarDec($2, String ) }
+      TINT IDENT { Param(Var($2), Int) }
+    | TSTRING IDENT { Param(Var($2), String) }
+    | TCHAR IDENT { Param(Var($2), Char)}
 ;
 
 block:
@@ -90,6 +102,7 @@ statement_list:
 
 statement:
       if_statement { $1 }
+    | foreach_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report }
 ;
@@ -97,6 +110,10 @@ statement:
 if_statement:
       TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block([])) }
     | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7) }
+;
+
+foreach_statement:
+      TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7) }
 ;
 
 expression:
@@ -115,6 +132,7 @@ expression:
 
 operand:
       literal { Lit($1) }
+    | IDENT TLPAREN args TRPAREN { Fun(Var($1),$3) }
     | IDENT { Var($1) }
     | TLPAREN expression TRPAREN { $2 }
 ;

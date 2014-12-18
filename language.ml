@@ -15,11 +15,6 @@ type literal =
     | True
     | False
 
-
-type variable_dec = VarDec of string * typ
-    
-type args = Args of variable_dec list
-
 type expression =
     | EQ of expression * expression                     (* a0 == a1 *)
     | NEQ of expression * expression                    (* a0 != a1 *)
@@ -33,33 +28,43 @@ type expression =
     | Or of expression * expression                     (* b0 || b1 *)
     | Var of string
     | Lit of literal
+    | Fun of expression * arguments
+and arguments = Arguments of expression list
+
+type param = Param of expression * typ
+    
+type parameters = Parameters of param list
 
 type statement =
     | Report
     | Block of statement list
     | IF of expression * statement * statement
+    | ForEach of param * expression * statement
 
-type macro = Macro of string * args * statement
+type macro = Macro of string * parameters * statement
 
 (* Printing functions *)
 
 open Printf
 
-let rec macro_to_str (Macro(name,args,stmts)) = sprintf "macro %s ( %s ) \n %s " name (args_to_str args) (statement_to_str stmts)
+let rec macro_to_str (Macro(name,params,stmts)) = sprintf "macro %s ( %s ) \n %s " name (params_to_str params) (statement_to_str stmts)
 
 and typ_to_str t = match t with
     | String -> "String"
-    | Int ->    "Int"
-    | Char ->   "Char"
+    | Int ->    "int"
+    | Char ->   "char"
     
-and  vardec_to_str (VarDec(a,t)) = sprintf "%s %s" (typ_to_str t) a 
+and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (exp_to_str a) 
 
-and args_to_str (Args(a)) = List.fold_left (fun prev v -> (prev) ^ (sprintf "%s, " (vardec_to_str v))) "" a
+and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (sprintf "%s, " (param_to_str v))) "" a
+
+and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf "%s, " (exp_to_str v))) "" a
 
 and statement_to_str (a : statement) = match a with
     | Report -> "report;\n"
     | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" (statement_to_str s) prev)) "" b)
     | IF(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
+    | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
 
 and exp_to_str exp = match exp with
     | EQ(a,b)       -> sprintf "%s == %s" (exp_to_str a) (exp_to_str b)
@@ -80,5 +85,6 @@ and exp_to_str exp = match exp with
                         | True             -> "true"
                         | False            -> "false"
                         end
+    | Fun(a,b)      -> sprintf "%s(%s)"   (exp_to_str a) (args_to_str b)
 
 

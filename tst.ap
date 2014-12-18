@@ -1,7 +1,6 @@
 macro hamming (String s, int d) {
-    if(s) {
-        report;
-    } else {
-        report;
+    foreach (char c : s) {
+        if(c == input())
+            report;
     }
 }
