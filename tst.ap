@@ -1,6 +1,12 @@
-macro hamming (String s, int d) {
+macro hamming_distance (String s, int d) {
     foreach (char c : s) {
         if(c == input())
             report;
+    }
+}
+
+network (list nodes, int d) {
+    foreach(String s : nodes) {
+          hamming_distance(s, d);
     }
 }

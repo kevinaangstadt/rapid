@@ -7,13 +7,15 @@ type typ =
     | String
     | Int
     | Char
+    | Counter
+    | List
 
 type literal =
     | StringLit of string * typ
     | IntLit of int * typ
     | CharLit of char * typ
     | True
-    | False
+    | False    
 
 type expression =
     | EQ of expression * expression                     (* a0 == a1 *)
@@ -40,19 +42,31 @@ type statement =
     | Block of statement list
     | IF of expression * statement * statement
     | ForEach of param * expression * statement
+    | VarDec of string * typ
+    | ExpStmt of expression option
 
 type macro = Macro of string * parameters * statement
+
+type network = Network of parameters * statement
+
+type program = Program of macro list * network
 
 (* Printing functions *)
 
 open Printf
 
-let rec macro_to_str (Macro(name,params,stmts)) = sprintf "macro %s ( %s ) \n %s " name (params_to_str params) (statement_to_str stmts)
+let rec program_to_str (Program(macros,network)) = sprintf "%s %s" (List.fold_left (fun prev a -> (prev) ^ (sprintf "%s" (macro_to_str a) )) "" macros) (network_to_str network)
+
+and network_to_str (Network(params,stmts)) = sprintf "network ( %s ) \n %s "  (params_to_str params) (statement_to_str stmts)
+
+and macro_to_str (Macro(name,params,stmts)) = sprintf "macro %s ( %s ) \n %s " name (params_to_str params) (statement_to_str stmts)
 
 and typ_to_str t = match t with
     | String -> "String"
     | Int ->    "int"
     | Char ->   "char"
+    | Counter ->"Counter"
+    | List ->   "List"
     
 and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (exp_to_str a) 
 
@@ -65,6 +79,11 @@ and statement_to_str (a : statement) = match a with
     | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" (statement_to_str s) prev)) "" b)
     | IF(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
     | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
+    | VarDec(var,t) -> sprintf "%s %s;" (typ_to_str t) var
+    | ExpStmt(exp) ->
+        match exp with
+        | Some(e) -> sprintf "%s;" (exp_to_str e)
+        | None -> ""
 
 and exp_to_str exp = match exp with
     | EQ(a,b)       -> sprintf "%s == %s" (exp_to_str a) (exp_to_str b)

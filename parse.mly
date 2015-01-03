@@ -23,12 +23,12 @@
 %token	TINT
 %token  TSTRING
 %token  TCHAR
+%token  TLIST
 %token	TCOUNTER
 %token	TMACRO
 %token	TNETWORK
 %token	TREPORT
 %token	TFILTER
-%token  TFOREACH
 %token  TMINUS
 %token	TASSIGN
 %token	TEQ
@@ -54,13 +54,26 @@
 %nonassoc TNOT UMINUS
 %right TTHEN TELSE
 
-%start macro
-%type<Language.macro> macro
+%start program
+%type<Language.program> program
 
 %%
 
+program:
+      macro_list network EOF { Program($1,$2) }
+;
+
+macro_list:
+      macro { [$1] }
+    | macro macro_list { $1 :: $2 }
+;
+
 macro:
-      TMACRO IDENT TLPAREN params TRPAREN block EOF { Macro($2,$4,$6) }
+      TMACRO IDENT TLPAREN params TRPAREN block { Macro($2,$4,$6) }
+;
+
+network:
+      TNETWORK TLPAREN params TRPAREN block { Network($3,$5) }
 ;
 
 void: { } ;
@@ -86,10 +99,7 @@ arg_list:
 ;
 
 input_variable:
-      TINT IDENT { Param(Var($2), Int) }
-    | TSTRING IDENT { Param(Var($2), String) }
-    | TCHAR IDENT { Param(Var($2), Char)}
-;
+      typ IDENT { Param(Var($2), $1) }
 
 block:
       TLBRACE statement_list TRBRACE { Block($2) }
@@ -105,6 +115,20 @@ statement:
     | foreach_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report }
+    | declaration { $1 }
+    | expression_statement { $1 }
+;
+
+declaration:
+      typ IDENT TSEMICOLON { VarDec($2,$1) }
+;
+
+typ:
+      TINT { Int }
+    | TSTRING { String }
+    | TCHAR { Char }
+    | TCOUNTER { Counter }
+    | TLIST { List }
 ;
 
 if_statement:
@@ -114,6 +138,11 @@ if_statement:
 
 foreach_statement:
       TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7) }
+;
+
+expression_statement:
+      expression TSEMICOLON { ExpStmt(Some $1) }
+    | TSEMICOLON { ExpStmt(None) }
 ;
 
 expression:
