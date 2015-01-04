@@ -51,6 +51,12 @@ type network = Network of parameters * statement
 
 type program = Program of macro list * network
 
+type container =
+    | Literal of literal
+    | Expression of expression
+    | Statement of statement
+    | MacroContainer of macro
+
 (* Printing functions *)
 
 open Printf

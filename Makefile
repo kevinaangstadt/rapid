@@ -11,6 +11,7 @@ all: language
 
 LANG_OBJS = \
 	language.cmx \
+	compiler.cmx \
 	parse.cmx \
 	lex.cmx \
 	main.cmx
