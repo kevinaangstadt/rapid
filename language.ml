@@ -104,7 +104,7 @@ and exp_to_str exp = match exp with
     | Or(a,b)       -> sprintf "%s || %s" (exp_to_str a) (exp_to_str b)
     | Var(a)        -> a
     | Lit(a)        -> begin match a with
-                        | StringLit(x,typ) -> x
+                        | StringLit(x,typ) -> sprintf "\"%s\"" x
                         | IntLit(x,typ)    -> sprintf "%d" x
                         | CharLit(x,typ)   -> sprintf "%c" x
                         | True             -> "true"

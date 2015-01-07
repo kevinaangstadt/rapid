@@ -9,6 +9,7 @@
 
 %token <int>    INT
 %token <string> IDENT
+%token <string> STRINGLIT
 %token TRUE
 %token FALSE
 
@@ -168,6 +169,7 @@ operand:
 
 literal:
       INT { IntLit($1,Int) }
+    | STRINGLIT { StringLit($1,String) }
     | TRUE { True }
     | FALSE { False }
 ;

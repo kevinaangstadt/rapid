@@ -62,6 +62,12 @@ rule initial = parse
             IDENT(str)
     }
     
+    | ('\"')(_)*('\"') {
+        let str = Lexing.lexeme lexbuf in
+        let trim = String.sub str 1 ((String.length str) - 2) in
+            STRINGLIT(trim)
+    }
+    
     | eof       { EOF }
     | _         {
         Printf.printf "invalid character '%s'\n" (Lexing.lexeme lexbuf) ;

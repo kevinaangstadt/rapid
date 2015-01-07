@@ -6,7 +6,5 @@ macro hamming_distance (String s, int d) {
 }
 
 network (list nodes, int d) {
-    foreach(String s : nodes) {
-          hamming_distance(s, d);
-    }
+    hamming_distance("hello", 3);
 }
