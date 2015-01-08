@@ -1,8 +1,8 @@
 let process (lexbuf : Lexing.lexbuf) =
-    try
+    (*try*)
         let program = Parse.program Lex.initial lexbuf in
-            (print_endline (Language.program_to_str program) ; Compiler.compile program )
-    with exn ->
+            Compiler.compile program 
+    (*with exn ->
       begin
         let curr = lexbuf.Lexing.lex_curr_p in
         let line = curr.Lexing.pos_lnum in
@@ -13,7 +13,7 @@ let process (lexbuf : Lexing.lexbuf) =
         Printf.printf "col: %d\n" cnum ;
         Printf.printf "tok: %s\n" tok;
         exit(-1)
-      end
+      end*)
 
 let read_file (name : string) =
     try

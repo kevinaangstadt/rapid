@@ -15,7 +15,12 @@ type literal =
     | IntLit of int * typ
     | CharLit of char * typ
     | True
-    | False    
+    | False
+
+type value =
+    | StringValue of string
+    | IntValue of int
+    | CharValue of char
 
 type expression =
     | EQ of expression * expression                     (* a0 == a1 *)
@@ -56,6 +61,9 @@ type container =
     | Expression of expression
     | Statement of statement
     | MacroContainer of macro
+    | Variable of string * typ * value option
+
+
 
 (* Printing functions *)
 
