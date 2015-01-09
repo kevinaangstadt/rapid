@@ -5,12 +5,14 @@
 open Parse
 } 
 
-let blank = [' ' '\012' '\r' '\t' '\n']
+let blank = [' ' '\t']
+let newline = ['\012' '\r' '\n']
 
 rule initial = parse
       "/*"      { let _ = comment lexbuf in initial lexbuf }
     | "//"      { endline lexbuf }
     | blank     { initial lexbuf }
+    | newline   { Lexing.new_line lexbuf ; initial lexbuf }
     
     | ","       { TCOMMA }
     | "."       { TDOT }
@@ -76,11 +78,11 @@ rule initial = parse
 
 and comment = parse
       "*/"      { () }
-    | '\n'      { comment lexbuf }
+    | '\n'      { Lexing.new_line lexbuf ; comment lexbuf }
     | eof       { Printf.printf "unterminated /* comment\n" ; exit 1 }
     | _         { comment lexbuf }
 
 and endline = parse
-      '\n'      { initial lexbuf }
+      '\n'      { Lexing.new_line lexbuf ; initial lexbuf }
     | _         { endline lexbuf }
     | eof       { EOF }

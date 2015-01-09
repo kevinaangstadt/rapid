@@ -1,6 +1,6 @@
 macro hamming_distance (String s, int d) {
     foreach (char c : s) {
-        //if(c == input())
+        if(c == input())
             report;
     }
 }

@@ -56,7 +56,7 @@ let rec evaluate_statement (stmt : statement) =
                                 | _ -> raise Syntax_error
                             end
             end
-        | VarDec(s,t) -> Hashtbl.add symbol_table s (Statement(stmt)) (*TODO OMG this will not work correctly.  So much error checking needed*)
+        | VarDec(s,t) -> Hashtbl.add symbol_table s (Variable(s,t,None)) (*TODO OMG this will not work correctly.  So much error checking needed*)
         | ExpStmt(e) -> match e with None -> () | Some x -> evaluate_expression x (*TODO check to see if the expression is allowed as a statement*)
         
 and evaluate_expression (exp : expression) =
