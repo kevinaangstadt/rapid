@@ -4,22 +4,23 @@
  *)
  
 open Language (* Contains all the types for the AP language *)
+open Id (*For counting on IDs*)
 
 exception Syntax_error
 exception Type_mismatch
 exception Uninitialized_variable
 
+let explode s =
+    let rec exp i l =
+        if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+    exp (String.length s - 1) []
 type symbol = (string, container) Hashtbl.t
 
 let symbol_table : symbol = Hashtbl.create 255
 let net = Automata.create ()
 
-let num = ref 1
-
-let explode s =
-    let rec exp i l =
-        if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-    exp (String.length s - 1) []
+let if_seed = new_seed ()
+let for_seed = new_seed ()
 
 let evaluate_report last=
     Automata.set_report net last true
@@ -36,10 +37,11 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
         | Block(b,scope) -> List.fold_left (fun last a -> evaluate_statement a last) last b
         | IF(exp,then_clause,else_clause,scope) ->
             begin
+            let id = Printf.sprintf "if_%d" (get_num if_seed) in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
-            let tb = Automata.STE("tb","$",Automata.NotStart,false,[],false) in
-            let fb = Automata.STE("fb","$",Automata.NotStart,false,[],false) in
-            let trap = Automata.STE("bob","*",Automata.NotStart,false,[(fb,None)],false) in
+            let tb = Automata.STE(id^"_tb","$",Automata.NotStart,false,[],false) in
+            let fb = Automata.STE(id^"_fb","$",Automata.NotStart,false,[],false) in
+            let trap = Automata.STE(id^"trap","^$",Automata.NotStart,false,[(fb,None)],false) in
             let rec flip_symbol (Automata.STE(id,set,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
@@ -60,17 +62,17 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     | [] -> [(tb,None)] in
                 Automata.STE(id,set,strt,latch,new_cons@old_cons,report)
                 end in
-            let if_exp = evaluate_expression exp None in
+            let if_exp = evaluate_expression exp None id (new_seed ()) in
             let neg_exp = flip_symbol if_exp in
             let if_exp_mod = add_conn if_exp in
             add_all if_exp_mod ;
             add_all neg_exp ;
-            Automata.connect net "bob" "bob" None;
+            Automata.connect net (id^"trap") (id^"trap") None;
             List.iter (fun s ->
                 Automata.connect net s (Automata.get_id if_exp_mod) None ;
                 Automata.connect net s (Automata.get_id neg_exp) None
             ) last ;
-            evaluate_statement then_clause ["tb"] @ evaluate_statement else_clause ["fb"]
+            evaluate_statement then_clause [(id^"_tb")] @ evaluate_statement else_clause [(id^"_fb")]
             end
         | ForEach((Param(Var(name),t)),source,f,scope) ->
             begin
@@ -142,7 +144,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise Syntax_error
         
-and evaluate_expression (exp : expression) (s: Automata.element option) =
+and evaluate_expression (exp : expression) (s: Automata.element option) (prefix:string) (seed:id_seed) =
     match exp with
         | EQ(a,b) -> begin
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
@@ -167,10 +169,10 @@ and evaluate_expression (exp : expression) (s: Automata.element option) =
                 end
             in
             if a = Input then
-                let new_element = Automata.STE((Printf.sprintf "_%d" !num),Char.escaped (get_value b),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),NotStart,false,[],false) in
                 helper new_element
             else if b = Input then
-                let new_element = Automata.STE((Printf.sprintf "_%d" !num),Char.escaped (get_value a),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),NotStart,false,[],false) in
                 helper new_element
             else raise Syntax_error 
             end
