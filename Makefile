@@ -33,7 +33,7 @@ clean:
 	$(OCAMLLEX) $<
 	
 language: $(LANG_OBJS)
-	$(OCAMLOPT) -o language $(LANG_OBJS)
+	$(OCAMLOPT) -o language str.cmxa $(LANG_OBJS)
 
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

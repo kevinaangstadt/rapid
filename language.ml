@@ -35,20 +35,24 @@ type expression =
     | Or of expression * expression                     (* b0 || b1 *)
     | Var of string
     | Lit of literal
-    | Fun of expression * arguments
+    | Input
+
 and arguments = Arguments of expression list
 
 type param = Param of expression * typ
     
 type parameters = Parameters of param list
 
+type scope = MacroScope | NetworkScope
+
 type statement =
-    | Report
-    | Block of statement list
-    | IF of expression * statement * statement
-    | ForEach of param * expression * statement
-    | VarDec of string * typ
-    | ExpStmt of expression option
+    | Report of scope
+    | Block of statement list * scope 
+    | IF of expression * statement * statement * scope
+    | ForEach of param * expression * statement * scope
+    | VarDec of string * typ * scope
+    | ExpStmt of expression option * scope
+    | Fun of expression * arguments * scope
 
 type macro = Macro of string * parameters * statement
 
@@ -89,15 +93,16 @@ and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (spri
 and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf "%s, " (exp_to_str v))) "" a
 
 and statement_to_str (a : statement) = match a with
-    | Report -> "report;\n"
-    | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" (statement_to_str s) prev)) "" b)
-    | IF(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
-    | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
-    | VarDec(var,t) -> sprintf "%s %s;" (typ_to_str t) var
-    | ExpStmt(exp) ->
+    | Report(_) -> "report;\n"
+    | Block(b,_) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" prev (statement_to_str s))) "" b)
+    | IF(exp,t,e,_) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
+    | ForEach(var,exp,s,_) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
+    | VarDec(var,t,_) -> sprintf "%s %s;" (typ_to_str t) var
+    | Fun(a,b,_)  -> sprintf "%s(%s);"   (exp_to_str a) (args_to_str b)
+    | ExpStmt(exp,_) ->
         match exp with
         | Some(e) -> sprintf "%s;" (exp_to_str e)
-        | None -> ""
+        | None -> "bob"
 
 and exp_to_str exp = match exp with
     | EQ(a,b)       -> sprintf "%s == %s" (exp_to_str a) (exp_to_str b)
@@ -118,6 +123,7 @@ and exp_to_str exp = match exp with
                         | True             -> "true"
                         | False            -> "false"
                         end
-    | Fun(a,b)      -> sprintf "%s(%s)"   (exp_to_str a) (args_to_str b)
+    | Input         -> "input()"
+    
 
 

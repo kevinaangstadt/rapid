@@ -1,10 +1,17 @@
 macro hamming_distance (String s, int d) {
     foreach (char c : s) {
+        //input() == c;
         if(c == input())
             report;
     }
 }
 
+macro test (char d) {
+    if(d == input())
+        report;
+}
+
 network (list nodes, int d) {
     hamming_distance("hello", 3);
+    //test('h');
 }

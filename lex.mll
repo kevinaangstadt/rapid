@@ -32,6 +32,7 @@ rule initial = parse
     | "network" { TNETWORK }
     | "report"  { TREPORT }
     | "filter"  { TFILTER }
+    | "input()" { TINPUT }
     
     | "="       { TASSIGN }
     | '-'       { TMINUS }
@@ -68,6 +69,11 @@ rule initial = parse
         let str = Lexing.lexeme lexbuf in
         let trim = String.sub str 1 ((String.length str) - 2) in
             STRINGLIT(trim)
+    }
+    
+    | ('\'')(_)('\'') {
+        let str = Lexing.lexeme lexbuf in
+            CHARLIT(String.get str 1)
     }
     
     | eof       { EOF }

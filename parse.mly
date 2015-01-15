@@ -5,11 +5,14 @@
  *)
  
  open Language
+ 
+ let scope = ref NetworkScope
 %}
 
 %token <int>    INT
 %token <string> IDENT
 %token <string> STRINGLIT
+%token <char>   CHARLIT
 %token TRUE
 %token FALSE
 
@@ -30,6 +33,7 @@
 %token	TNETWORK
 %token	TREPORT
 %token	TFILTER
+%token  TINPUT
 %token  TMINUS
 %token	TASSIGN
 %token	TEQ
@@ -70,11 +74,11 @@ macro_list:
 ;
 
 macro:
-      TMACRO IDENT TLPAREN params TRPAREN block { Macro($2,$4,$6) }
+      TMACRO IDENT TLPAREN params TRPAREN block { scope := MacroScope ; Macro($2,$4,$6) }
 ;
 
 network:
-      TNETWORK TLPAREN params TRPAREN block { Network($3,$5) }
+      TNETWORK TLPAREN params TRPAREN block { scope := NetworkScope ; Network($3,$5) }
 ;
 
 void: { } ;
@@ -103,7 +107,7 @@ input_variable:
       typ IDENT { Param(Var($2), $1) }
 
 block:
-      TLBRACE statement_list TRBRACE { Block($2) }
+      TLBRACE statement_list TRBRACE { Block($2,!scope) }
 ;
 
 statement_list:
@@ -115,13 +119,14 @@ statement:
       if_statement { $1 }
     | foreach_statement { $1 }
     | block { $1 }
-    | TREPORT TSEMICOLON { Report }
+    | TREPORT TSEMICOLON { Report(!scope) }
     | declaration { $1 }
     | expression_statement { $1 }
+    | IDENT TLPAREN args TRPAREN TSEMICOLON { Fun(Var($1),$3,!scope) }
 ;
 
 declaration:
-      typ IDENT TSEMICOLON { VarDec($2,$1) }
+      typ IDENT TSEMICOLON { VarDec($2,$1,!scope) }
 ;
 
 typ:
@@ -133,17 +138,17 @@ typ:
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block([])) }
-    | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block([],!scope),!scope) }
+    | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7,!scope) }
 ;
 
 foreach_statement:
-      TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7) }
+      TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7,!scope) }
 ;
 
 expression_statement:
-      expression TSEMICOLON { ExpStmt(Some $1) }
-    | TSEMICOLON { ExpStmt(None) }
+      expression TSEMICOLON { ExpStmt(Some $1,!scope) }
+    | TSEMICOLON { ExpStmt(None,!scope) }
 ;
 
 expression:
@@ -162,7 +167,7 @@ expression:
 
 operand:
       literal { Lit($1) }
-    | IDENT TLPAREN args TRPAREN { Fun(Var($1),$3) }
+    | TINPUT { Input }
     | IDENT { Var($1) }
     | TLPAREN expression TRPAREN { $2 }
 ;
@@ -170,6 +175,7 @@ operand:
 literal:
       INT { IntLit($1,Int) }
     | STRINGLIT { StringLit($1,String) }
+    | CHARLIT {CharLit($1,Char)}
     | TRUE { True }
     | FALSE { False }
 ;
