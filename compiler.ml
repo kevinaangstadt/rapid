@@ -17,7 +17,7 @@ let explode s =
 type symbol = (string, container) Hashtbl.t
 
 let symbol_table : symbol = Hashtbl.create 255
-let net = Automata.create ()
+let net = Automata.create "" ""
 
 let if_seed = new_seed ()
 let for_seed = new_seed ()
@@ -41,7 +41,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
             let tb = Automata.STE(id^"_tb","$",Automata.NotStart,false,[],false) in
             let fb = Automata.STE(id^"_fb","$",Automata.NotStart,false,[],false) in
-            let trap = Automata.STE(id^"trap","^$",Automata.NotStart,false,[(fb,None)],false) in
+            let trap = Automata.STE(id^"_trap","^$",Automata.NotStart,false,[(fb,None)],false) in
             let rec flip_symbol (Automata.STE(id,set,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
@@ -67,7 +67,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             let if_exp_mod = add_conn if_exp in
             add_all if_exp_mod ;
             add_all neg_exp ;
-            Automata.connect net (id^"trap") (id^"trap") None;
+            Automata.connect net (id^"_trap") (id^"_trap") None;
             List.iter (fun s ->
                 Automata.connect net s (Automata.get_id if_exp_mod) None ;
                 Automata.connect net s (Automata.get_id neg_exp) None
@@ -221,7 +221,7 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
     List.iter(fun (Param((Var(p)),t)) -> Hashtbl.remove symbol_table p) params
     end ; return
 
-let compile (Program(macros,network)) =
+let compile (Program(macros,network)) name =
     let verify_network_params (Parameters(p)) =
         List.iter (fun param -> match param with
                                 | Param(exp,typ) -> begin
@@ -251,5 +251,6 @@ let compile (Program(macros,network)) =
                 | _ -> (Printf.printf "network error!" ; exit 1)
             end
     ;
-    Printf.printf "%s" (Automata.network_to_str net)
+    Automata.set_name net name ;
+    (Automata.network_to_str net)
 

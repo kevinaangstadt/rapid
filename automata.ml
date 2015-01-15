@@ -37,7 +37,9 @@ type network = {
     states : (string, element) Hashtbl.t;
     start : (string * element) list;
     report : (string * element) list;
-    last : element option (*TODO will probably have to be some sort of list*)
+    last : element option; (*TODO will probably have to be some sort of list*)
+    id : string;
+    description : string;
 }
 
 type macro = {
@@ -55,12 +57,16 @@ exception Duplicate_ID
 exception Element_not_found of string
 exception Malformed_connection
 
-let create () = ref {
+let create name desc = ref {
     states = Hashtbl.create 255;
     start = [];
     report = [];
     last = None;
+    id = name;
+    description = desc;
 }
+
+let set_name (net:network ref) name = net := {!net with id=name;}
 
 let make_ste id set strt latch connect report =
     STE(id,set,strt,latch,connect,report)
@@ -246,7 +252,7 @@ let network_to_str (net:network ref) =
     let internal = ref "" in
     Hashtbl.iter (fun k e -> internal := !internal ^ element_to_str e) (!net).states ;
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ^
-    "<automata-network name=\"Bob\" id=\"Bob\">\n<description></description>\n" ^ (*TODO figure out how to get an actual name here*)
+    (Printf.sprintf "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description )^ (*TODO figure out how to get an actual name here*)
     !internal ^
     "</automata-network>"
     
