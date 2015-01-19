@@ -1,7 +1,7 @@
 macro hamming_distance (String s, int d) {
     foreach (char c : s) {
         //input() == c;
-        if(c == input() && c != input() && c == input())
+        if(c == input() && c == input())
             report;
     }
 }
@@ -12,10 +12,10 @@ macro test (char d) {
 }
 
 macro test2 () {
-    if('c' == input() && 'a' == input() && 'r' == input() && 't' == input())
-        report;
+    if('c' == input() && (('a' == input() || 'o' == input()) || ('o' == input() && 'a' == input() )) && 't' == input())
+        hamming_distance("hello", 3);
     else
-        report;
+        hamming_distance("hello", 4);
 }
 
 network (list nodes, int d) {

@@ -10,6 +10,8 @@ exception Syntax_error
 exception Type_mismatch
 exception Uninitialized_variable
 
+module StringSet = Set.Make(String)
+
 let explode s =
     let rec exp i l =
         if i < 0 then l else exp (i - 1) (s.[i] :: l) in
@@ -39,14 +41,14 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             begin
             let id = Printf.sprintf "if_%d" (get_num if_seed) in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
-            let tb = ref [] in
-            let fb = ref [] in
+            let tb = ref StringSet.empty in
+            let fb = ref StringSet.empty in
             let rec flip_symbol (Automata.STE(id,set,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
                 let connection_list : Automata.element_connections list = match connect with
                     | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect
-                    | [] -> tb := id :: !tb ; [] in
+                    | [] -> tb := StringSet.add id !tb ; [] in
                 let new_ste = if (String.get set 0) = '^' then
                         Automata.STE("n_"^id,String.sub set 1 ((String.length set) - 1 ),strt,latch,connection_list,report)
                     else Automata.STE("n_"^id,"^"^set,strt,latch,connection_list,report) in
@@ -79,22 +81,24 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         Automata.connect net ("n"^id) (Automata.get_id a) None ;
                         (add_conn_neg a)
                         ) connect
-                    | [] -> fb := id :: ("n"^id) :: !fb
+                    | [] -> fb := StringSet.add ("n"^id) (StringSet.add id !fb) ; ()
                 end in
             let if_exp = evaluate_expression exp None id (new_seed ()) in
-            let neg_exp = flip_symbol if_exp in
-            let if_exp_mod = add_conn if_exp in
-            let neg_neg_exp = rename if_exp in
-            add_all if_exp_mod ;
-            add_all neg_exp ;
-            add_all neg_neg_exp ;
-            add_conn_neg neg_exp ;
-            Automata.remove_element net (Automata.get_id neg_neg_exp) ;
-            List.iter (fun s ->
-                Automata.connect net s (Automata.get_id if_exp_mod) None ;
-                Automata.connect net s (Automata.get_id neg_exp) None
-            ) last ;
-            evaluate_statement then_clause !tb @ evaluate_statement else_clause !fb
+            List.iter (fun if_exp -> 
+                let neg_exp = flip_symbol if_exp in
+                let if_exp_mod = add_conn if_exp in
+                let neg_neg_exp = rename if_exp in
+                add_all if_exp_mod ;
+                add_all neg_exp ;
+                add_all neg_neg_exp ;
+                add_conn_neg neg_exp ;
+                Automata.remove_element net (Automata.get_id neg_neg_exp) ;
+                List.iter (fun s ->
+                    Automata.connect net s (Automata.get_id if_exp_mod) None ;
+                    Automata.connect net s (Automata.get_id neg_exp) None
+                ) last
+            ) if_exp ;
+            evaluate_statement then_clause (StringSet.elements !tb) @ evaluate_statement else_clause (StringSet.elements !fb)
             end
         | ForEach((Param(Var(name),t)),source,f,scope) ->
             begin
@@ -166,30 +170,32 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise Syntax_error
         
-and evaluate_expression (exp : expression) (s: Automata.element option) (prefix:string) (seed:id_seed) =
+and evaluate_expression (exp : expression) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
+    (*Helper...requires type checking first or will result in a syntax error*)
+    let get_value v =
+        begin
+        match v with
+            | Lit(CharLit(a,_)) -> a
+            | Var(a) -> try
+                let var = Hashtbl.find symbol_table a in
+                begin
+                match var with
+                    | Variable(name,typ,Some CharValue(s)) ->
+                        if typ = Char then s else raise Syntax_error
+                    | _ -> raise Syntax_error
+                end
+                with Not_found -> raise Syntax_error
+            | _ -> raise Syntax_error
+        end in
     match exp with
         | EQ(a,b) -> begin
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
-                    | None -> new_element
-                    | Some x -> Automata.STE(id,set,strt,latch,(x,None)::connect,report)
+                    | None -> [new_element]
+                    | Some x ->
+                        let cons = List.map (fun a -> (a,None)) x in
+                        [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
-            let get_value v =
-                begin
-                match v with
-                    | Lit(CharLit(a,_)) -> a
-                    | Var(a) -> try
-                        let var = Hashtbl.find symbol_table a in
-                        begin
-                        match var with
-                            | Variable(name,typ,Some CharValue(s)) ->
-                                if typ = Char then s else raise Syntax_error
-                            | _ -> raise Syntax_error
-                        end
-                        with Not_found -> raise Syntax_error
-                    | _ -> raise Syntax_error
-                end
-            in
             if a = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),NotStart,false,[],false) in
                 helper new_element
@@ -201,25 +207,11 @@ and evaluate_expression (exp : expression) (s: Automata.element option) (prefix:
         | NEQ(a,b) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
-                    | None -> new_element
-                    | Some x -> Automata.STE(id,set,strt,latch,(x,None)::connect,report)
+                    | None -> [new_element]
+                    | Some x -> 
+                        let cons = List.map (fun a -> (a,None)) x in
+                        [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
-            let get_value v =
-                begin
-                match v with
-                    | Lit(CharLit(a,_)) -> a
-                    | Var(a) -> try
-                        let var = Hashtbl.find symbol_table a in
-                        begin
-                        match var with
-                            | Variable(name,typ,Some CharValue(s)) ->
-                                if typ = Char then s else raise Syntax_error
-                            | _ -> raise Syntax_error
-                        end
-                        with Not_found -> raise Syntax_error
-                    | _ -> raise Syntax_error
-                end
-            in
             if a = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value b)),NotStart,false,[],false) in
                 helper new_element
@@ -237,15 +229,59 @@ and evaluate_expression (exp : expression) (s: Automata.element option) (prefix:
             let rec add_to_last (Automata.STE(id,set,strt,latch,connect,report) as start) x =
                 match connect with
                 | hd :: tl -> Automata.STE(id,set,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
-                | [] -> Automata.STE(id,set,strt,latch,[(x,None)],report)
+                | [] ->
+                    let temp = List.map (fun a -> (a,None)) x in
+                    Automata.STE(id,set,strt,latch,temp,report)
             in
             let b_eval = evaluate_expression b None prefix seed in
-            let Automata.STE(id,set,strt,latch,connect,report) as a_eval = evaluate_expression a (Some b_eval) prefix seed in
+            let a_eval = evaluate_expression a (Some b_eval) prefix seed in
+            begin
             match s with
                 | None -> a_eval
-                | Some x -> add_to_last a_eval x
-        (*| Or(a,b)
-        | Var(a)
+                | Some x -> List.map (fun a -> add_to_last a x) a_eval
+            end
+        | Or(a,b) ->
+            let rec build_charset c =
+                match c with
+                    | EQ(a,b)
+                    | NEQ(a,b) ->
+                        if a = Input then Char.escaped (get_value b)
+                        else if b = Input then Char.escaped (get_value a)
+                        else raise Syntax_error
+                    | Or(a,b) -> (build_charset a) ^ (build_charset b)
+                    | _ -> ""
+                in
+            let rec can_condense c =
+                match c with
+                    | EQ(_,_)
+                    | NEQ(_,_) -> true
+                    | Or(a,b) -> (can_condense a) && (can_condense b)
+                    | And(_,_) -> false
+                in
+            if can_condense a then
+                if can_condense b then
+                    let connect = match s with
+                        | None -> []
+                        | Some x -> List.map (fun a -> (a,None)) x
+                    in [Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), NotStart, false, connect, false)]
+                else
+                let b_eval = evaluate_expression b s prefix seed in
+                    let connect = match s with
+                        | None -> []
+                        | Some x -> List.map (fun a -> (a,None)) x
+                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)), NotStart, false, connect, false) :: b_eval
+            else
+                if can_condense b then
+                let a_eval = evaluate_expression a s prefix seed in
+                    let connect = match s with
+                        | None -> []
+                        | Some x -> List.map (fun a -> (a,None)) x
+                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset b)), NotStart, false, connect, false) :: a_eval
+                else
+                    let a_eval = evaluate_expression a s prefix seed in
+                    let b_eval = evaluate_expression b s prefix seed in
+                    a_eval @ b_eval
+        (*| Var(a)
         | Lit(a)
         | Input*)
         
