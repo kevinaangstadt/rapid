@@ -3,7 +3,7 @@ let file = ref ""
 let process (lexbuf : Lexing.lexbuf) =
     (*try*)
         let program = Parse.program Lex.initial lexbuf in
-            Compiler.compile program !file  (*print_endline (Language.program_to_str program)*)
+            (*print_endline (Language.program_to_str program) ; *)Compiler.compile program !file  (**)
     (*with exn ->
       begin
         let curr = lexbuf.Lexing.lex_curr_p in

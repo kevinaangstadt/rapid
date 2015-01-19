@@ -106,6 +106,9 @@ end in match e with
     | Counter(id,target,behavior,report,connect) -> add_helper net id e NotStart report
     | Combinatorial(id,eod,report,connect) -> add_helper net id e NotStart report
 
+let remove_element (net: network ref) e_id =
+    Hashtbl.remove (!net).states e_id 
+
 let connect (net:network ref) e1_id e2_id (terminal : string option) =
 let e1 = begin try Hashtbl.find (!net).states e1_id
     with Not_found -> raise (Element_not_found e1_id)
