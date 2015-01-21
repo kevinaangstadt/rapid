@@ -21,6 +21,7 @@ type value =
     | StringValue of string
     | IntValue of int
     | CharValue of char
+    | AutomataElement of Automata.element
 
 type expression =
     | EQ of expression * expression                     (* a0 == a1 *)
@@ -53,6 +54,8 @@ type statement =
     | VarDec of string * typ * scope
     | ExpStmt of expression option * scope
     | Fun of expression * arguments * scope
+    | Count of expression * scope
+    | Reset of expression * scope
 
 type macro = Macro of string * parameters * statement
 
@@ -99,6 +102,8 @@ and statement_to_str (a : statement) = match a with
     | ForEach(var,exp,s,_) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
     | VarDec(var,t,_) -> sprintf "%s %s;" (typ_to_str t) var
     | Fun(a,b,_)  -> sprintf "%s(%s);"   (exp_to_str a) (args_to_str b)
+    | Count(a,_)  -> sprintf "%s.count();" (exp_to_str a)
+    | Reset(a,_)  -> sprintf "%s.reset();" (exp_to_str a)
     | ExpStmt(exp,_) ->
         match exp with
         | Some(e) -> sprintf "%s;" (exp_to_str e)

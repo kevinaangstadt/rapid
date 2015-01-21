@@ -10,8 +10,9 @@ OCAMLLEX  = ocamllex
 all: language
 
 LANG_OBJS = \
-	language.cmx \
+	util.cmx \
 	automata.cmx \
+	language.cmx \
 	id.cmx \
 	compiler.cmx \
 	parse.cmx \

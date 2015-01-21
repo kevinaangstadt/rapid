@@ -42,6 +42,8 @@ rule initial = parse
     | "report"  { TREPORT }
     | "filter"  { TFILTER }
     | "input()" { TINPUT }
+    | "count()" { TCOUNT }
+    | "reset()" { TRESET }
     
     | "="       { TASSIGN }
     | '-'       { TMINUS }

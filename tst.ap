@@ -1,25 +1,26 @@
 macro hamming_distance (String s, int d) {
+    Counter cnt;
     foreach (char c : s) {
-        //input() == c;
-        if(c == input() && c == input())
-            report;
+        if(c != input())
+            cnt.count();
     }
+    if(cnt <= d)
+        report;
+    cnt.reset();
 }
 
 macro test (char d) {
-    if(d == input() && d == input())
+    if(!(d == input() && d == input()))
         report;
 }
 
 macro test2 () {
     if('c' == input() && (('a' == input() || 'o' == input()) || ('o' == input() && 'a' == input() )) && 't' == input())
-        hamming_distance("hello", 3);
-    else
-        hamming_distance("hello", 4);
+        report;
 }
 
 network (list nodes, int d) {
-    //hamming_distance("hello", 3);
+    hamming_distance("hello", 3);
     //hamming_distance("jello", 3);
-    test2();
+
 }

@@ -34,6 +34,8 @@
 %token	TREPORT
 %token	TFILTER
 %token  TINPUT
+%token  TCOUNT
+%token  TRESET
 %token  TMINUS
 %token	TASSIGN
 %token	TEQ
@@ -123,6 +125,8 @@ statement:
     | declaration { $1 }
     | expression_statement { $1 }
     | IDENT TLPAREN args TRPAREN TSEMICOLON { Fun(Var($1),$3,!scope) }
+    | IDENT TDOT TCOUNT TSEMICOLON { Count(Var($1),!scope) }
+    | IDENT TDOT TRESET TSEMICOLON { Reset(Var($1),!scope) }
 ;
 
 declaration:

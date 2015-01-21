@@ -87,6 +87,10 @@ let contains (net:network ref) e =
     let id = get_id e in
     Hashtbl.mem (!net).states id
 
+let get_element (net: network ref) e_id =
+    try Hashtbl.find (!net).states e_id
+    with Not_found -> raise (Element_not_found e_id)
+
 let add_element net e =
 let add_helper (net: network ref) id e start report = begin
 let start = match start with
@@ -127,6 +131,16 @@ let e2_conn : element_connections = begin match terminal with
             Hashtbl.replace (!net).states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
         | Combinatorial(id,eod,report,connect) ->
             Hashtbl.replace (!net).states e1_id (Combinatorial(id,eod,report,e2_conn::connect))
+
+let set_count (net:network ref) e_id cnt =
+let e = begin try Hashtbl.find (!net).states e_id
+    with Not_found -> raise (Element_not_found e_id)
+    end in begin
+    match e with
+        | Counter(id,target,behavior,report,connect) ->
+            Hashtbl.replace (!net).states e_id (Counter(id,cnt,behavior,report,connect))
+        | _ -> raise (Element_not_found e_id)
+    end
 
 let set_report (net:network ref) e_id r =
 let e = begin try Hashtbl.find (!net).states e_id
@@ -220,7 +234,12 @@ let e = begin try Hashtbl.find macro.states e_id
 
 (*Output Functions*)  
 let element_to_str e =
-    let start_to_str strt =
+    let behavior_to_str behavior =
+        match behavior with
+            | Pulse -> "pulse"
+            | Latch -> "latch"
+            | Roll -> "roll"
+    in let start_to_str strt =
         match strt with
             | NotStart -> "none"
             | Start -> "start-of-data"
@@ -248,7 +267,14 @@ let element_to_str e =
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-match element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
             "</state-transition-element>\n"
             end
-        | Counter(id,target,behavior,report,connect) -> ""
+        | Counter(id,target,behavior,report,connect) -> begin
+            let rep_line =
+                if report then "<report-on-match/>\n" else "" in
+            Printf.sprintf "<counter id=\"%s\" target=\"%d\" at-target=\"%s\">\n" id target (behavior_to_str behavior) ^
+            rep_line ^
+            List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-target element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
+            "</counter>\n"
+            end
         | Combinatorial(id,eod,report,connect) -> ""
 
 let network_to_str (net:network ref) =
