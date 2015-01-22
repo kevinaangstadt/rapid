@@ -21,10 +21,12 @@ let explode s =
 type symbol = (string, container) Hashtbl.t
 
 let symbol_table : symbol = Hashtbl.create 255
+let symbol_scope = ref StringSet.empty
+let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 10
 let net = Automata.create "" ""
 
 let if_seed = new_seed ()
-let for_seed = new_seed ()
+let c_seed = new_seed ()
 
 let evaluate_report last=
     Automata.set_report net last true
@@ -32,13 +34,8 @@ let evaluate_report last=
 let is_counter exp =
     match exp with
         | Var(a) -> begin try
-            let var = Hashtbl.find symbol_table a in
-            begin
-            match var with
-                | Variable(name,typ, Some (AutomataElement(e))) ->
-                    typ = Counter
-                | _ -> false
-            end
+            let var = Hashtbl.find counter_rename a in
+                true
             with Not_found -> false
             end
         | _ -> false
@@ -183,12 +180,18 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | VarDec(s,t,scope) ->
             begin
-            let value =
+            let (id,value) =
                 match t with
-                | Counter -> Some (AutomataElement(Automata.Counter(s,100,Pulse,false,[])))
-                | _ -> None in
+                | Counter ->
+                    let num = get_num c_seed in
+                    let id = Printf.sprintf "%s_%d" s num in
+                    let _ = Hashtbl.add counter_rename s id in
+                    (id, Some (AutomataElement(Automata.Counter(id,100,Pulse,false,[]))))
+                | _ -> (s,None) in
             (* TODO We need some notion of scope to remove these after the fact! *)
-            Hashtbl.add symbol_table s (Variable(s,t,value)) ; last (*TODO OMG this will not work correctly.  So much error checking needed*)
+            Hashtbl.add symbol_table id (Variable(id,t,value)) ;
+            symbol_scope := StringSet.add id !symbol_scope ;
+            last (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
         (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (evaluate_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
         | Fun(Var(a),Arguments(b),scope) -> begin
@@ -229,8 +232,9 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     end
                 | _ -> raise Syntax_error
             end
-        | Count(Var(a),scope) ->
-            let counter = Hashtbl.find symbol_table a in
+        | Count(Var(a),scope) -> begin try
+            let id = Hashtbl.find counter_rename a in
+            let counter = Hashtbl.find symbol_table id in
             begin
             match counter with
                 | Variable(s,t,v) ->
@@ -245,8 +249,11 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     else raise Type_mismatch
                 | _ -> raise Type_mismatch
             end
-        | Reset(Var(a),scope) ->
-            let counter = Hashtbl.find symbol_table a in
+            with Not_found -> raise Syntax_error
+            end
+        | Reset(Var(a),scope) -> begin try
+            let id = Hashtbl.find counter_rename a in
+            let counter = Hashtbl.find symbol_table id in
             begin
             match counter with
                 | Variable(s,t,v) ->
@@ -260,6 +267,8 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         end
                     else raise Type_mismatch
                 | _ -> raise Type_mismatch
+            end
+            with Not_found -> raise Syntax_error
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise Syntax_error
         
@@ -460,7 +469,8 @@ and evaluate_counter_expression (exp : expression) =
         begin
         match v with
             | Var(a) -> try
-                let var = Hashtbl.find symbol_table a in
+                let id = Hashtbl.find counter_rename a in
+                let var = Hashtbl.find symbol_table id in
                 begin
                 match var with
                     | Variable(name,typ, Some (AutomataElement(e))) ->
@@ -469,6 +479,13 @@ and evaluate_counter_expression (exp : expression) =
                 end
                 with Not_found -> raise Syntax_error
             | _ -> raise Syntax_error
+        end in
+    (*TODO determine if we need to do this*)
+    let kill_counter (Var(a) as v) =
+        begin
+            let id = Hashtbl.find counter_rename a in
+            Hashtbl.remove symbol_table id ;
+            Hashtbl.remove counter_rename a
         end in
     let helper num c =
         begin
@@ -498,13 +515,15 @@ and evaluate_counter_expression (exp : expression) =
     (*if counter is not listed first, flip it!*)
     match exp with
         | EQ(a,b) -> if is_counter b then evaluate_counter_expression (EQ(b,a))
-                     else helper (get_value b) (get_counter a)
+                     else
+                        helper (get_value b) (get_counter a)
         | GT(a,b) -> evaluate_counter_expression (LEQ(b,a))
         | GEQ(a,b) -> evaluate_counter_expression (LT(b,a))
         | LEQ(a,b)
         | LT(a,b) ->
             let value = if is_counter a then get_value b else raise Syntax_error in
             helper value (get_counter a)
+        
 
 
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
@@ -536,7 +555,9 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         | _ -> raise Syntax_error
     ) in  begin
     (* remove those bindings again *)
-    List.iter(fun (Param((Var(p)),t)) -> Hashtbl.remove symbol_table p) params
+    List.iter(fun (Param((Var(p)),t)) -> Hashtbl.remove symbol_table p) params ;
+    StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
+    symbol_scope := StringSet.empty ;
     end ; return
 
 let compile (Program(macros,network)) name =
