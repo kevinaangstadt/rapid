@@ -40,7 +40,7 @@ type expression =
 
 and arguments = Arguments of expression list
 
-type param = Param of expression * typ
+type param = Param of string * typ
     
 type parameters = Parameters of param list
 
@@ -89,7 +89,7 @@ and typ_to_str t = match t with
     | Counter ->"Counter"
     | List ->   "List"
     
-and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (exp_to_str a) 
+and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) a 
 
 and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (sprintf "%s, " (param_to_str v))) "" a
 

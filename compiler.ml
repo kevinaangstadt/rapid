@@ -152,7 +152,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 end ;
             evaluate_statement then_clause (StringSet.elements !tb) @ evaluate_statement else_clause (StringSet.elements !fb)
             end
-        | ForEach((Param(Var(name),t)),source,f,scope) ->
+        | ForEach((Param(name,t)),source,f,scope) ->
             begin
             match source with
                 | Var(v) -> (*TODO error handling*)
@@ -528,7 +528,7 @@ and evaluate_counter_expression (exp : expression) =
 
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
-    List.iter2 (fun (Param((Var(p)),t)) arg ->
+    List.iter2 (fun (Param(p,t)) arg ->
         let value =
             begin
             match arg with
@@ -555,7 +555,7 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         | _ -> raise Syntax_error
     ) in  begin
     (* remove those bindings again *)
-    List.iter(fun (Param((Var(p)),t)) -> Hashtbl.remove symbol_table p) params ;
+    List.iter(fun (Param(p,t)) -> Hashtbl.remove symbol_table p) params ;
     StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
     symbol_scope := StringSet.empty ;
     end ; return
@@ -564,10 +564,6 @@ let compile (Program(macros,network)) name =
     let verify_network_params (Parameters(p)) =
         List.iter (fun param -> match param with
                                 | Param(exp,typ) -> begin
-                                    match exp with
-                                    | Var(str) -> ()
-                                    | _ -> (Printf.printf "param error 1!" ; exit 1)
-                                    ;
                                     match typ with
                                     | Counter -> (Printf.printf "param error 2!" ; exit 1)
                                     | _ -> ()

@@ -106,7 +106,7 @@ arg_list:
 ;
 
 input_variable:
-      typ IDENT { Param(Var($2), $1) }
+      typ IDENT { Param($2, $1) }
 
 block:
       TLBRACE statement_list TRBRACE { Block($2,!scope) }
