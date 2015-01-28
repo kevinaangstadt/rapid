@@ -34,7 +34,7 @@ let evaluate_report last=
 let is_counter exp =
     match exp with
         | Var(a) -> begin try
-            let var = Hashtbl.find counter_rename a in
+            let _ = Hashtbl.find counter_rename a in
                 true
             with Not_found -> false
             end
@@ -112,9 +112,9 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 begin
                 (*(c, (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb)*)
                 let (c,n,if_exp,yes,no) = evaluate_counter_expression exp in
-                    Automata.add_element net (Automata.STE(c^"_trap","$",NotStart,false,[],false)) ;
-                    Automata.add_element net (Automata.STE("n_"^c^"_trap","^$",NotStart,false,[],false)) ;
-                    Automata.add_element net (Automata.STE(c^"_trap_t","\\x26",NotStart,false,[],false)) ;
+                    Automata.add_element net (Automata.STE(c^"_trap","$",Automata.NotStart,false,[],false)) ;
+                    Automata.add_element net (Automata.STE("n_"^c^"_trap","^$",Automata.NotStart,false,[],false)) ;
+                    Automata.add_element net (Automata.STE(c^"_trap_t","\\x26",Automata.NotStart,false,[],false)) ;
                     add_all net if_exp ;
                     List.iter (fun a -> Automata.connect net a (c^"_trap") None ; Automata.connect net a ("n_"^c^"_trap") None) last ;
                     Automata.connect net c (Automata.get_id if_exp) None ;
@@ -186,7 +186,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     let num = get_num c_seed in
                     let id = Printf.sprintf "%s_%d" s num in
                     let _ = Hashtbl.add counter_rename s id in
-                    (id, Some (AutomataElement(Automata.Counter(id,100,Pulse,false,[]))))
+                    (id, Some (AutomataElement(Automata.Counter(id,100,Automata.Pulse,false,[]))))
                 | _ -> (s,None) in
             (* TODO We need some notion of scope to remove these after the fact! *)
             Hashtbl.add symbol_table id (Variable(id,t,value)) ;
@@ -205,13 +205,10 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     
                     List.iter2 (fun (arg:expression) (p:param) -> match arg with
                         | Var(s) ->
-                            let var = Hashtbl.find symbol_table s in
+                            let Variable(ident,t,value) = Hashtbl.find symbol_table s in
                                 begin
-                                match var with
-                                    | Variable(ident,t,value) ->
-                                        match p with Param(e,t2) ->
-                                            if not (t = t2) then raise Type_mismatch
-                                    | _ -> raise Syntax_error
+                                match p with Param(e,t2) ->
+                                    if not (t = t2) then raise Type_mismatch
                                 end
                         | Lit(l) ->
                             begin
@@ -219,8 +216,10 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                                 | StringLit(_,t)
                                 | IntLit(_,t)
                                 | CharLit(_,t) ->
+                                    begin
                                     match p with Param(e,t2) ->
                                         if not (t = t2) then raise Type_mismatch
+                                    end
                                 | _ -> raise Syntax_error
                             end
                         | _ -> raise Syntax_error
@@ -300,10 +299,10 @@ and evaluate_expression (exp : expression) (s: Automata.element list option) (pr
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
             if a = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),Automata.NotStart,false,[],false) in
                 helper new_element
             else if b = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise Syntax_error 
             end
@@ -316,10 +315,10 @@ and evaluate_expression (exp : expression) (s: Automata.element list option) (pr
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
             if a = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value b)),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value b)),Automata.NotStart,false,[],false) in
                 helper new_element
             else if b = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value a)),NotStart,false,[],false) in
+                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value a)),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise Syntax_error 
             end
@@ -425,20 +424,20 @@ and evaluate_expression (exp : expression) (s: Automata.element list option) (pr
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in [Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), NotStart, false, connect, false)]
+                    in [Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), Automata.NotStart, false, connect, false)]
                 else
                 let b_eval = evaluate_expression b s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)), NotStart, false, connect, false) :: b_eval
+                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)), Automata.NotStart, false, connect, false) :: b_eval
             else
                 if can_condense b then
                 let a_eval = evaluate_expression a s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset b)), NotStart, false, connect, false) :: a_eval
+                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset b)), Automata.NotStart, false, connect, false) :: a_eval
                 else
                     let a_eval = evaluate_expression a s prefix seed in
                     let b_eval = evaluate_expression b s prefix seed in
@@ -481,7 +480,7 @@ and evaluate_counter_expression (exp : expression) =
             | _ -> raise Syntax_error
         end in
     (*TODO determine if we need to do this*)
-    let kill_counter (Var(a) as v) =
+    let kill_counter (Var(a)) =
         begin
             let id = Hashtbl.find counter_rename a in
             Hashtbl.remove symbol_table id ;
@@ -497,11 +496,11 @@ and evaluate_counter_expression (exp : expression) =
                     | None -> raise Negative_count
             else
                 let id = Printf.sprintf "%s_%d" c i in
-                let trigger = Automata.STE(id^"_t","\\x26",NotStart,false,[],false) in
+                let trigger = Automata.STE(id^"_t","\\x26",Automata.NotStart,false,[],false) in
                 let connect = match e with
                     | Some x -> [(trigger,None);(x,None)]
                     | None -> [(trigger,None)] in
-                    let ctr = Automata.STE(id,"$",NotStart,false,connect,false) in
+                    let ctr = Automata.STE(id,"$",Automata.NotStart,false,connect,false) in
                     create (i - 1) (Some ctr)
             end in
         let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t" c a) (range low high) in
@@ -584,7 +583,7 @@ let compile (Program(macros,network)) name =
                         let start_str = Printf.sprintf "start_%d" (get_num seed) in
                         let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
                         let _ = Automata.add_element net start in
-                        evaluate_statement s [start_str] ; ()) b
+                        evaluate_statement s [start_str] ; () ) b
                     end
                 | _ -> (Printf.printf "network error!" ; exit 1)
             end

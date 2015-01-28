@@ -199,7 +199,7 @@ if (Hashtbl.mem macro.states e1_id) then
     else
         (*try e2 as an end terminal*)
         begin try
-            let term = List.find (fun a -> e2_id = a) macro.output_ids in
+            let _ = List.find (fun a -> e2_id = a) macro.output_ids in
                 {macro with output = (e2_id,e1) :: macro.output}
             
             with Not_found -> raise (Element_not_found e1_id)

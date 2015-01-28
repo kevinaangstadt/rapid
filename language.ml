@@ -110,16 +110,16 @@ and statement_to_str (a : statement) = match a with
         | None -> "bob"
 
 and exp_to_str exp = match exp with
-    | EQ(a,b)       -> sprintf "%s == %s" (exp_to_str a) (exp_to_str b)
-    | NEQ(a,b)      -> sprintf "%s != %s" (exp_to_str a) (exp_to_str b)
-    | LEQ(a,b)      -> sprintf "%s <= %s" (exp_to_str a) (exp_to_str b)
-    | GEQ(a,b)      -> sprintf "%s >= %s" (exp_to_str a) (exp_to_str b)
-    | LT(a,b)       -> sprintf "%s < %s"  (exp_to_str a) (exp_to_str b)
-    | GT(a,b)       -> sprintf "%s > %s"  (exp_to_str a) (exp_to_str b)
-    | Not(a)        -> sprintf "!%s"      (exp_to_str a)
+    | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
+    | NEQ(a,b)      -> sprintf "(%s != %s)" (exp_to_str a) (exp_to_str b)
+    | LEQ(a,b)      -> sprintf "(%s <= %s)" (exp_to_str a) (exp_to_str b)
+    | GEQ(a,b)      -> sprintf "(%s >= %s)" (exp_to_str a) (exp_to_str b)
+    | LT(a,b)       -> sprintf "(%s < %s)"  (exp_to_str a) (exp_to_str b)
+    | GT(a,b)       -> sprintf "(%s > %s)"  (exp_to_str a) (exp_to_str b)
+    | Not(a)        -> sprintf "(!%s)"      (exp_to_str a)
     | Negative(a)   -> sprintf "-(%s)"    (exp_to_str a)
-    | And(a,b)      -> sprintf "%s && %s" (exp_to_str a) (exp_to_str b)
-    | Or(a,b)       -> sprintf "%s || %s" (exp_to_str a) (exp_to_str b)
+    | And(a,b)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
+    | Or(a,b)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
     | Var(a)        -> a
     | Lit(a)        -> begin match a with
                         | StringLit(x,typ) -> sprintf "\"%s\"" x
