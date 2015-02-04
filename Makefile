@@ -13,6 +13,7 @@ LANG_OBJS = \
 	util.cmx \
 	automata.cmx \
 	language.cmx \
+	tc.cmx \
 	id.cmx \
 	compiler.cmx \
 	parse.cmx \

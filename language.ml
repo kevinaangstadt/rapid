@@ -3,12 +3,21 @@
  * Abstract Syntax for AP Language
  *)
  
+module StringSet = Set.Make(String)
+
+exception Syntax_error
+exception Type_mismatch
+exception Uninitialized_variable
+exception Negative_count
+
 type typ =
     | String
     | Int
     | Char
     | Counter
     | List
+    | Automata
+    | Boolean
 
 type literal =
     | StringLit of string * typ
@@ -21,6 +30,7 @@ type value =
     | StringValue of string
     | IntValue of int
     | CharValue of char
+    | BooleanValue of bool
     | AutomataElement of Automata.element
 
 type expression =
@@ -36,6 +46,7 @@ type expression =
     | Or of expression * expression                     (* b0 || b1 *)
     | Var of string
     | Lit of literal
+    | Fun of string * string * arguments                (* var.fun(args)*)
     | Input
 
 and arguments = Arguments of expression list
@@ -49,13 +60,12 @@ type scope = MacroScope | NetworkScope
 type statement =
     | Report of scope
     | Block of statement list * scope 
-    | IF of expression * statement * statement * scope
+    | IfWhile of expression * statement * statement * bool * scope
     | ForEach of param * expression * statement * scope
+    | While of expression * statement * scope
     | VarDec of string * typ * scope
     | ExpStmt of expression option * scope
-    | Fun of expression * arguments * scope
-    | Count of expression * scope
-    | Reset of expression * scope
+    | MacroCall of string * arguments * scope
 
 type macro = Macro of string * parameters * statement
 
@@ -63,13 +73,15 @@ type network = Network of parameters * statement
 
 type program = Program of macro list * network
 
+(* Used in the Symbol Table *)
 type container =
-    | Literal of literal
-    | Expression of expression
-    | Statement of statement
     | MacroContainer of macro
     | Variable of string * typ * value option
-
+type exp_return =
+    | AutomataExp of Automata.element list
+    | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string)
+    | BooleanExp of bool
+type symbol = (string, container) Hashtbl.t
 
 
 (* Printing functions *)
@@ -98,16 +110,17 @@ and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf 
 and statement_to_str (a : statement) = match a with
     | Report(_) -> "report;\n"
     | Block(b,_) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" prev (statement_to_str s))) "" b)
-    | IF(exp,t,e,_) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
+    | IfWhile(exp,t,e,w,_) -> if not w then sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
+                              else sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s,_) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
     | VarDec(var,t,_) -> sprintf "%s %s;" (typ_to_str t) var
-    | Fun(a,b,_)  -> sprintf "%s(%s);"   (exp_to_str a) (args_to_str b)
-    | Count(a,_)  -> sprintf "%s.count();" (exp_to_str a)
-    | Reset(a,_)  -> sprintf "%s.reset();" (exp_to_str a)
+    | MacroCall(a,b,_)  -> sprintf "%s(%s);"   a (args_to_str b)
+    (*| Count(a,_)  -> sprintf "%s.count();" a
+    | Reset(a,_)  -> sprintf "%s.reset();" a*)
     | ExpStmt(exp,_) ->
         match exp with
         | Some(e) -> sprintf "%s;" (exp_to_str e)
-        | None -> "bob"
+        | None -> "NOP"
 
 and exp_to_str exp = match exp with
     | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
@@ -128,7 +141,8 @@ and exp_to_str exp = match exp with
                         | True             -> "true"
                         | False            -> "false"
                         end
-    | Input         -> "input()"
+    | Fun(a,b,c)    -> sprintf "%s.%s(%s)" a b (args_to_str c)
+    | Input         -> "input"
     
 
 

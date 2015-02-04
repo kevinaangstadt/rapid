@@ -7,50 +7,49 @@
  open Language
  
  let scope = ref NetworkScope
+ 
 %}
 
-%token <int>    INT
-%token <string> IDENT
-%token <string> STRINGLIT
-%token <char>   CHARLIT
-%token TRUE
-%token FALSE
+%token  <int*Util.loc>    INT
+%token  <string*Util.loc> IDENT
+%token  <string*Util.loc> STRINGLIT
+%token  <char*Util.loc>   CHARLIT
+%token  <Util.loc>        TRUE
+%token  <Util.loc>        FALSE
 
-%token	TCOMMA
-%token	TDOT
-%token	TSEMICOLON
-%token	TCOLON
-%token	TLPAREN
-%token	TRPAREN
-%token	TLBRACE
-%token	TRBRACE
-%token	TINT
-%token  TSTRING
-%token  TCHAR
-%token  TLIST
-%token	TCOUNTER
-%token	TMACRO
-%token	TNETWORK
-%token	TREPORT
-%token	TFILTER
-%token  TINPUT
-%token  TCOUNT
-%token  TRESET
-%token  TMINUS
-%token	TASSIGN
-%token	TEQ
-%token	TNEQ
-%token	TLEQ
-%token	TGEQ
-%token	TLT
-%token	TGT
-%token	TAND
-%token	TOR
-%token	TNOT
-%token	TFOREACH
-%token	TWHILE
-%token	TIF
-%token	TELSE
+%token	<Util.loc>        TCOMMA
+%token	<Util.loc>        TDOT
+%token	<Util.loc>        TSEMICOLON
+%token	<Util.loc>        TCOLON
+%token	<Util.loc>        TLPAREN
+%token	<Util.loc>        TRPAREN
+%token	<Util.loc>        TLBRACE
+%token	<Util.loc>        TRBRACE
+%token	<Util.loc>        TINT
+%token  <Util.loc>        TSTRING
+%token  <Util.loc>        TCHAR
+%token  <Util.loc>        TLIST
+%token	<Util.loc>        TCOUNTER
+%token	<Util.loc>        TMACRO
+%token	<Util.loc>        TNETWORK
+%token	<Util.loc>        TREPORT
+%token	<Util.loc>        TFILTER
+%token  <Util.loc>        TINPUT
+%token  <Util.loc>        TMINUS
+%token	<Util.loc>        TASSIGN
+%token	<Util.loc>        TEQ
+%token	<Util.loc>        TNEQ
+%token	<Util.loc>        TLEQ
+%token	<Util.loc>        TGEQ
+%token	<Util.loc>        TLT
+%token	<Util.loc>        TGT
+%token	<Util.loc>        TAND
+%token	<Util.loc>        TOR
+%token	<Util.loc>        TNOT
+%token	<Util.loc>        TFOREACH
+%token	<Util.loc>        TWHILE
+%token	<Util.loc>        TIF
+%token	<Util.loc>        TELSE
 
 %token	EOF
 
@@ -76,7 +75,10 @@ macro_list:
 ;
 
 macro:
-      TMACRO IDENT TLPAREN params TRPAREN block { scope := MacroScope ; Macro($2,$4,$6) }
+      TMACRO IDENT TLPAREN params TRPAREN block {
+        let ident,loc = $2 in
+        scope := MacroScope ; Macro(ident,$4,$6)
+        }
 ;
 
 network:
@@ -106,7 +108,10 @@ arg_list:
 ;
 
 input_variable:
-      typ IDENT { Param($2, $1) }
+      typ IDENT {
+        let name,loc = $2 in
+            Param(name, $1)
+    }
 
 block:
       TLBRACE statement_list TRBRACE { Block($2,!scope) }
@@ -120,17 +125,22 @@ statement_list:
 statement:
       if_statement { $1 }
     | foreach_statement { $1 }
+    | while_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report(!scope) }
     | declaration { $1 }
     | expression_statement { $1 }
-    | IDENT TLPAREN args TRPAREN TSEMICOLON { Fun(Var($1),$3,!scope) }
-    | IDENT TDOT TCOUNT TSEMICOLON { Count(Var($1),!scope) }
-    | IDENT TDOT TRESET TSEMICOLON { Reset(Var($1),!scope) }
+    | IDENT TLPAREN args TRPAREN TSEMICOLON {
+        let name,loc = $1 in
+            MacroCall(name,$3,!scope)
+    }
 ;
 
 declaration:
-      typ IDENT TSEMICOLON { VarDec($2,$1,!scope) }
+      typ IDENT TSEMICOLON {
+        let name,loc = $2 in
+            VarDec(name,$1,!scope)
+    }
 ;
 
 typ:
@@ -142,13 +152,16 @@ typ:
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IF($3,$5,Block([],!scope),!scope) }
-    | TIF TLPAREN expression TRPAREN statement TELSE statement { IF($3,$5,$7,!scope) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IfWhile($3,$5,Block([],!scope),false,!scope) }
+    | TIF TLPAREN expression TRPAREN statement TELSE statement { IfWhile($3,$5,$7,false,!scope) }
 ;
 
 foreach_statement:
       TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7,!scope) }
 ;
+
+while_statement:
+      TWHILE TLPAREN expression TRPAREN statement { IfWhile($3,$5,ExpStmt(None,!scope),true,!scope) }
 
 expression_statement:
       expression TSEMICOLON { ExpStmt(Some $1,!scope) }
@@ -171,15 +184,32 @@ expression:
 
 operand:
       literal { Lit($1) }
-    | TINPUT { Input }
-    | IDENT { Var($1) }
+    | TINPUT TLPAREN TRPAREN { Input }
+    | IDENT {
+        let name,loc = $1 in
+            Var(name)
+        }
+    | IDENT TDOT IDENT TLPAREN args TRPAREN {
+        let name,loc1 = $1 in
+        let func,loc2 = $3 in
+            Fun(name,func,$5)
+    }
     | TLPAREN expression TRPAREN { $2 }
 ;
 
 literal:
-      INT { IntLit($1,Int) }
-    | STRINGLIT { StringLit($1,String) }
-    | CHARLIT {CharLit($1,Char)}
+      INT {
+        let value,loc = $1 in
+            IntLit(value,Int)
+    }
+    | STRINGLIT {
+        let value,loc = $1 in
+            StringLit(value,String)
+    }
+    | CHARLIT {
+        let value,loc = $1 in
+            CharLit(value,Char)
+    }
     | TRUE { True }
     | FALSE { False }
 ;

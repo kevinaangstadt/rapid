@@ -3,6 +3,7 @@
  * ocamllex definition for language
  *)
 open Parse
+open Util
 
 let string_buff = Buffer.create 256
 
@@ -11,6 +12,7 @@ let reset_string () = Buffer.clear string_buff
 let store_char c = Buffer.add_char string_buff c
 
 let get_string () = Buffer.contents string_buff
+
 
 } 
 
@@ -23,68 +25,66 @@ rule initial = parse
     | blank     { initial lexbuf }
     | newline   { Lexing.new_line lexbuf ; initial lexbuf }
     
-    | ","       { TCOMMA }
-    | "."       { TDOT }
-    | ";"       { TSEMICOLON }
-    | ":"       { TCOLON }
-    | '('       { TLPAREN }
-    | ')'       { TRPAREN }
-    | '{'       { TLBRACE }
-    | '}'       { TRBRACE }
+    | ","       { TCOMMA(where lexbuf) }
+    | "."       { TDOT(where lexbuf) }
+    | ";"       { TSEMICOLON(where lexbuf) }
+    | ":"       { TCOLON(where lexbuf) }
+    | '('       { TLPAREN(where lexbuf) }
+    | ')'       { TRPAREN(where lexbuf) }
+    | '{'       { TLBRACE(where lexbuf) }
+    | '}'       { TRBRACE(where lexbuf) }
     
-    | "String"  { TSTRING }
-    | "int"     { TINT }
-    | "char"    { TCHAR }
-    | "list"    { TLIST }
-    | "Counter" { TCOUNTER }
-    | "macro"   { TMACRO }
-    | "network" { TNETWORK }
-    | "report"  { TREPORT }
-    | "filter"  { TFILTER }
-    | "input()" { TINPUT }
-    | "count()" { TCOUNT }
-    | "reset()" { TRESET }
+    | "String"  { TSTRING(where lexbuf) }
+    | "int"     { TINT(where lexbuf) }
+    | "char"    { TCHAR(where lexbuf) }
+    | "list"    { TLIST(where lexbuf) }
+    | "Counter" { TCOUNTER(where lexbuf) }
+    | "macro"   { TMACRO(where lexbuf) }
+    | "network" { TNETWORK(where lexbuf) }
+    | "report"  { TREPORT(where lexbuf) }
+    | "filter"  { TFILTER(where lexbuf) }
+    | "input"   { TINPUT(where lexbuf) }
     
-    | "="       { TASSIGN }
-    | '-'       { TMINUS }
+    | "="       { TASSIGN(where lexbuf) }
+    | '-'       { TMINUS(where lexbuf) }
     
-    | "=="      { TEQ }
-    | "!="      { TNEQ }
-    | "<="      { TLEQ }
-    | ">="      { TGEQ }
-    | "<"       { TLT }
-    | ">"       { TGT }
-    | "&&"      { TAND }
-    | "||"      { TOR }
-    | '!'       { TNOT }
+    | "=="      { TEQ(where lexbuf) }
+    | "!="      { TNEQ(where lexbuf) }
+    | "<="      { TLEQ(where lexbuf) }
+    | ">="      { TGEQ(where lexbuf) }
+    | "<"       { TLT(where lexbuf) }
+    | ">"       { TGT(where lexbuf) }
+    | "&&"      { TAND(where lexbuf) }
+    | "||"      { TOR(where lexbuf) }
+    | '!'       { TNOT(where lexbuf) }
     
-    | "true"    { TRUE }
-    | "false"   { FALSE }
+    | "true"    { TRUE(where lexbuf) }
+    | "false"   { FALSE(where lexbuf) }
     
-    | "foreach" { TFOREACH }
-    | "while"   { TWHILE }
-    | "if"      { TIF }
-    | "else"    { TELSE }
+    | "foreach" { TFOREACH(where lexbuf) }
+    | "while"   { TWHILE(where lexbuf) }
+    | "if"      { TIF(where lexbuf) }
+    | "else"    { TELSE(where lexbuf) }
     
     | ("0x")?['0'-'9']+ {
         let str = Lexing.lexeme lexbuf in
-            INT((int_of_string str))
+            INT((int_of_string str),(where lexbuf))
     }
     
     | ['A'-'Z''a'-'z''_']['0'-'9''A'-'Z''a'-'z''_']* {
         let str = Lexing.lexeme lexbuf in 
-            IDENT(str)
+            IDENT(str,(where lexbuf))
     }
     
     | '"' {
         reset_string () ;
         string lexbuf ;
-        STRINGLIT(get_string ())
+        STRINGLIT(get_string (),(where lexbuf))
     }
     
     | ('\'')(_)('\'') {
         let str = Lexing.lexeme lexbuf in
-            CHARLIT(String.get str 1)
+            CHARLIT(String.get str 1, (where lexbuf))
     }
     
     | eof       { EOF }

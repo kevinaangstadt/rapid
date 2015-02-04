@@ -20,7 +20,8 @@ macro test2 () {
 }
 
 network (list nodes, int d) {
-    hamming_distance("hello", 3);
+    test('d');
+    //hamming_distance("hello", 3);
     //hamming_distance("jello", 3);
 
 }
