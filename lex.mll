@@ -33,6 +33,8 @@ rule initial = parse
     | ')'       { TRPAREN(where lexbuf) }
     | '{'       { TLBRACE(where lexbuf) }
     | '}'       { TRBRACE(where lexbuf) }
+    | '['       { TLBRACKET(where lexbuf) }
+    | ']'       { TRBRACKET(where lexbuf) }
     
     | "String"  { TSTRING(where lexbuf) }
     | "int"     { TINT(where lexbuf) }
@@ -47,6 +49,9 @@ rule initial = parse
     
     | "="       { TASSIGN(where lexbuf) }
     | '-'       { TMINUS(where lexbuf) }
+    | '+'       { TPLUS(where lexbuf) }
+    | '*'       { TTIMES(where lexbuf) }
+    | '%'       { TMOD(where lexbuf) }
     
     | "=="      { TEQ(where lexbuf) }
     | "!="      { TNEQ(where lexbuf) }

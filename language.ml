@@ -44,7 +44,12 @@ type expression =
     | Negative of expression                            (* -a0 *)
     | And of expression * expression                    (* b0 && b1 *) 
     | Or of expression * expression                     (* b0 || b1 *)
+    | Plus of expression * expression
+    | Minus of expression * expression
+    | Times of expression * expression
+    | Mod of expression * expression
     | Var of string
+    | ListVar of expression * expression option
     | Lit of literal
     | Fun of string * string * arguments                (* var.fun(args)*)
     | Input
@@ -57,13 +62,18 @@ type parameters = Parameters of param list
 
 type scope = MacroScope | NetworkScope
 
+type initialize =
+    | PrimitiveInit of  expression
+    | ArrayInit of initialize list
+
 type statement =
     | Report of scope
     | Block of statement list * scope 
     | IfWhile of expression * statement * statement * bool * scope
     | ForEach of param * expression * statement * scope
     | While of expression * statement * scope
-    | VarDec of string * typ * scope
+    | VarDec of (expression * typ * initialize option) list * scope
+    | Assign of string * expression * scope
     | ExpStmt of expression option * scope
     | MacroCall of string * arguments * scope
 
@@ -81,6 +91,7 @@ type exp_return =
     | AutomataExp of Automata.element list
     | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string)
     | BooleanExp of bool
+    | IntExp of int
 type symbol = (string, container) Hashtbl.t
 
 
@@ -100,6 +111,10 @@ and typ_to_str t = match t with
     | Char ->   "char"
     | Counter ->"Counter"
     | List ->   "List"
+
+and init_to_str i = match i with
+    | PrimitiveInit(e) -> exp_to_str e
+    | ArrayInit(a) -> sprintf "{ %s }" (List.fold_left (fun prev e -> sprintf "%s, %s" prev (init_to_str e)) "" a)
     
 and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) a 
 
@@ -113,10 +128,18 @@ and statement_to_str (a : statement) = match a with
     | IfWhile(exp,t,e,w,_) -> if not w then sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
                               else sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s,_) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
-    | VarDec(var,t,_) -> sprintf "%s %s;" (typ_to_str t) var
+    | VarDec(var,_) -> List.fold_left (fun prev (s,t,i) ->
+                                    let s = match s with
+                                        | Var(a) -> a
+                                        | ListVar(a,None) -> sprintf "%s[]" (exp_to_str a)
+                                        | ListVar(a,Some b) -> sprintf "%s[%s]" (exp_to_str a) (exp_to_str b)
+                                    in
+                                    let new_var = match i with
+                                        | None -> sprintf "%s %s;\n" (typ_to_str t) s
+                                        | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)
+                                    in prev ^ new_var
+                                 ) "" var
     | MacroCall(a,b,_)  -> sprintf "%s(%s);"   a (args_to_str b)
-    (*| Count(a,_)  -> sprintf "%s.count();" a
-    | Reset(a,_)  -> sprintf "%s.reset();" a*)
     | ExpStmt(exp,_) ->
         match exp with
         | Some(e) -> sprintf "%s;" (exp_to_str e)
@@ -133,6 +156,10 @@ and exp_to_str exp = match exp with
     | Negative(a)   -> sprintf "-(%s)"    (exp_to_str a)
     | And(a,b)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
     | Or(a,b)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
+    | Plus(a,b)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
+    | Minus(a,b)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)
+    | Times(a,b)    -> sprintf "(%s * %s)"  (exp_to_str a) (exp_to_str b)
+    | Mod(a,b)      -> sprintf "(%s %% %s)" (exp_to_str a) (exp_to_str b)
     | Var(a)        -> a
     | Lit(a)        -> begin match a with
                         | StringLit(x,typ) -> sprintf "\"%s\"" x

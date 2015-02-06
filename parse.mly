@@ -25,6 +25,8 @@
 %token	<Util.loc>        TRPAREN
 %token	<Util.loc>        TLBRACE
 %token	<Util.loc>        TRBRACE
+%token  <Util.loc>        TLBRACKET
+%token  <Util.loc>        TRBRACKET
 %token	<Util.loc>        TINT
 %token  <Util.loc>        TSTRING
 %token  <Util.loc>        TCHAR
@@ -36,6 +38,9 @@
 %token	<Util.loc>        TFILTER
 %token  <Util.loc>        TINPUT
 %token  <Util.loc>        TMINUS
+%token  <Util.loc>        TPLUS
+%token  <Util.loc>        TTIMES
+%token  <Util.loc>        TMOD
 %token	<Util.loc>        TASSIGN
 %token	<Util.loc>        TEQ
 %token	<Util.loc>        TNEQ
@@ -137,10 +142,41 @@ statement:
 ;
 
 declaration:
-      typ IDENT TSEMICOLON {
+      typ declarator_list {
+        let dec_list = List.map (fun (name,value) -> (name,$1,value)) $2 in
+        VarDec(List.rev dec_list,!scope)
+    }
+    /*  typ IDENT TSEMICOLON {
         let name,loc = $2 in
             VarDec(name,$1,!scope)
-    }
+    } */
+;
+
+declarator_list:
+      declarator { [$1] }
+    | declarator_list TCOMMA declarator { $3 :: $1 }
+;
+
+declarator:
+      direct_declarator { ($1,None) }
+    | direct_declarator TASSIGN initialize { ($1,Some $3) }
+;
+
+direct_declarator:
+      IDENT { let(a,loc) = $1 in Var(a) }
+    | direct_declarator TLBRACKET TRBRACKET { ListVar($1,None) }
+    | direct_declarator TLBRACKET expression TRBRACKET { ListVar($1,Some $3) }
+;
+
+initialize:
+      expression { PrimitiveInit($1) }
+    | TLBRACE initialize_list TRBRACE { ArrayInit(List.rev $2) }
+    | TLBRACE initialize_list TCOMMA TRBRACE { ArrayInit(List.rev $2) }
+;
+
+initialize_list:
+      initialize { [$1] }
+    | initialize_list TCOMMA initialize { $3 :: $1 }
 ;
 
 typ:
@@ -169,14 +205,46 @@ expression_statement:
 ;
 
 expression:
-      expression TAND expression    { And($1,$3) }
-    | expression TOR expression     { Or($1,$3) }
-    | expression TEQ expression     { EQ($1,$3) }
-    | expression TNEQ expression    { NEQ($1,$3) }
-    | expression TLEQ expression    { LEQ($1,$3) }
-    | expression TGEQ expression    { GEQ($1,$3) }
-    | expression TGT expression     { GT($1,$3) }
-    | expression TLT expression     { LT($1,$3) }
+      disjunction                   { $1 }
+;
+
+disjunction:
+      conjunction                   { $1 }
+    | disjunction TOR conjunction   { Or($1,$3) }
+;
+
+conjunction:
+      equality                      { $1 }
+    | conjunction TAND equality     { And($1,$3) }
+;
+
+/*(* TODO: Does this make sense to not allow chaining? *)*/
+equality:
+      relation                      { $1 }
+    | relation TEQ relation         { EQ($1,$3) }
+    | relation TNEQ relation        { NEQ($1,$3) }
+;
+
+relation:
+      addition                      { $1 }
+    | relation TLEQ addition        { LEQ($1,$3) }
+    | relation TGEQ addition        { GEQ($1,$3) }
+    | relation TGT addition         { GT($1,$3) }
+    | relation TLT addition         { LT($1,$3) }
+;
+
+addition:
+      multiplication                { $1 }
+    | addition TPLUS multiplication { Plus($1,$3) }
+    | addition TMINUS multiplication{ Minus($1,$3) }
+;
+
+multiplication:
+      negation                      { $1 }
+    | multiplication TTIMES negation{ Times($1,$3) }
+    | multiplication TMOD negation  { Mod($1,$3) }
+
+negation:
     | TNOT operand                  { Not($2) }
     | TMINUS operand %prec UMINUS   { Negative($2) }
     | operand                       { $1 }

@@ -193,21 +193,37 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                                 | _ -> raise Syntax_error
                             end
             end
-        | VarDec(s,t,scope) ->
+        | VarDec(var,scope) ->
             begin
-            let (id,value) =
-                match t with
-                | Counter ->
-                    let num = get_num c_seed in
-                    let id = Printf.sprintf "%s_%d" s num in
-                    let _ = Hashtbl.add counter_rename s id in
-                    let _ = Hashtbl.add symbol_table s (Variable(id,t,None)) in
-                    symbol_scope := StringSet.add s !symbol_scope ;
-                    (id, Some (AutomataElement(Automata.Counter(id,100,Automata.Pulse,false,[]))))
-                | _ -> (s,None) in
-            (* TODO We need some notion of scope to remove these after the fact! *)
-            Hashtbl.add symbol_table id (Variable(id,t,value)) ;
-            symbol_scope := StringSet.add id !symbol_scope ;
+            List.iter (fun (s,t,init) ->
+                (*TODO support list*)
+                let s = match s with
+                    | Var(a) -> a
+                in
+                let (id,value) =
+                    match t with
+                    | Counter ->
+                        let num = get_num c_seed in
+                        let id = Printf.sprintf "%s_%d" s num in
+                        let _ = Hashtbl.add counter_rename s id in
+                        let _ = Hashtbl.add symbol_table s (Variable(id,t,None)) in
+                        symbol_scope := StringSet.add s !symbol_scope ;
+                        (id, Some (AutomataElement(Automata.Counter(id,100,Automata.Pulse,false,[]))))
+                    | _ -> let x = match init with
+                                    | None -> None
+                                    | Some i -> begin match i with
+                                        | PrimitiveInit(e) ->
+                                            let v = evaluate_expression e None "" (new_seed ()) in
+                                            match v with
+                                                | BooleanExp(b) -> Some (BooleanValue(b))
+                                                | IntExp(b) -> Some (IntValue(b))
+                                        end
+                            in (s,x) in
+                (* TODO We need some notion of scope to remove these after the fact! *)
+                Hashtbl.add symbol_table id (Variable(id,t,value)) ;
+                symbol_scope := StringSet.add id !symbol_scope ;
+            ) var ;
+            
             last (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
         (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (evaluate_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
@@ -261,6 +277,7 @@ and evaluate_expression (exp : expression) (s : Automata.element list option) (p
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
         | Automata -> AutomataExp(evaluate_expression_aut exp s prefix seed)
+        | Int -> IntExp(evaluate_int_expression exp)
 and evaluate_expression_aut (exp : expression) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
     let get_value v =
