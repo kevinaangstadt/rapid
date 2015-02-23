@@ -6,6 +6,13 @@
  
  open Language
  
+ let make_exp exp loc =
+    {
+        exp = exp ;
+        expr_type = NoType ;
+        loc = loc ;
+    }
+ 
 %}
 
 %token  <int*Util.loc>    INT
@@ -88,8 +95,6 @@ network:
       TNETWORK TLPAREN params TRPAREN block { Network($3,$5) }
 ;
 
-void: { } ;
-
 params:
     | /* empty */ { Parameters( [] ) }
     | param_list  { Parameters($1) }
@@ -101,8 +106,8 @@ param_list:
 ;
 
 args:
-      void { Arguments( [] ) }
-    | arg_list { Arguments($1) }
+    | /* empty */ { Arguments( [] ) }
+    | arg_list    { Arguments($1) }
 ;
 
 arg_list:
@@ -135,9 +140,14 @@ block:
 ;
 
 statement_list:
-      statement_list statement { $1 @ [$2] }
-    | statement { [$1] }
+      statement_list statement opt_semi_list { $1 @ [$2] }
+    | statement opt_semi_list { [$1] }
 ;
+
+opt_semi_list:
+    | /* nothing */ { () }
+    | TSEMICOLON opt_semi_list { () }
+    ;
 
 statement:
       if_statement { $1 }
@@ -145,7 +155,7 @@ statement:
     | while_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report }
-    | declaration { $1 }
+    | declaration TSEMICOLON { $1 }
     | expression_statement { $1 }
     | IDENT TLPAREN args TRPAREN TSEMICOLON {
         let name,loc = $1 in
@@ -217,58 +227,58 @@ expression:
 
 disjunction:
       conjunction                   { $1 }
-    | disjunction TOR conjunction   { Or($1,$3,None) }
+    | disjunction TOR conjunction   { make_exp (Or($1,$3)) ($1.loc) }
 ;
 
 conjunction:
       equality                      { $1 }
-    | conjunction TAND equality     { And($1,$3,None) }
+    | conjunction TAND equality     { make_exp (And($1,$3)) ($1.loc)  }
 ;
 
 /*(* TODO: Does this make sense to not allow chaining? *)*/
 equality:
       relation                      { $1 }
-    | relation TEQ relation         { EQ($1,$3,None) }
-    | relation TNEQ relation        { NEQ($1,$3,None) }
+    | relation TEQ relation         { make_exp (EQ($1,$3)) ($1.loc) }
+    | relation TNEQ relation        { make_exp (NEQ($1,$3)) ($1.loc) }
 ;
 
 relation:
       addition                      { $1 }
-    | relation TLEQ addition        { LEQ($1,$3,None) }
-    | relation TGEQ addition        { GEQ($1,$3,None) }
-    | relation TGT addition         { GT($1,$3,None) }
-    | relation TLT addition         { LT($1,$3,None) }
+    | relation TLEQ addition        { make_exp (LEQ($1,$3)) ($1.loc) }
+    | relation TGEQ addition        { make_exp (GEQ($1,$3)) ($1.loc) }
+    | relation TGT addition         { make_exp (GT($1,$3)) ($1.loc) }
+    | relation TLT addition         { make_exp (LT($1,$3)) ($1.loc) }
 ;
 
 addition:
       multiplication                { $1 }
-    | addition TPLUS multiplication { Plus($1,$3,None) }
-    | addition TMINUS multiplication{ Minus($1,$3,None) }
+    | addition TPLUS multiplication { make_exp (Plus($1,$3)) ($1.loc) }
+    | addition TMINUS multiplication{ make_exp (Minus($1,$3)) ($1.loc) }
 ;
 
 multiplication:
       negation                      { $1 }
-    | multiplication TTIMES negation{ Times($1,$3,None) }
-    | multiplication TMOD negation  { Mod($1,$3,None) }
+    | multiplication TTIMES negation{ make_exp (Times($1,$3)) ($1.loc) }
+    | multiplication TMOD negation  { make_exp (Mod($1,$3)) ($1.loc) }
 
 negation:
-    | TNOT operand                  { Not($2,None) }
-    | TMINUS operand %prec UMINUS   { Negative($2) }
+    | TNOT operand                  { make_exp (Not($2)) ($1.loc) }
+    | TMINUS operand %prec UMINUS   { make_exp (Negative($2)) ($1.loc) }
     | operand                       { $1 }
 ;
 
 operand:
-      literal { Lit($1) }
-    | TINPUT TLPAREN TRPAREN { Input }
+      literal { make_exp (Lit($1)) ($1.loc) }
+    | TINPUT TLPAREN TRPAREN { make_exp (Input) ($1) }
     /* TODO make this actually for lvals */
     | IDENT {  
         let name,loc = $1 in
-            Lval((name,NoOffset),None)
+            make_exp (Lval((name,NoOffset)) loc
         }
     | IDENT TDOT IDENT TLPAREN args TRPAREN {
         let name,loc1 = $1 in
         let func,loc2 = $3 in
-            Fun((name,NoOffset),func,$5,None)
+            make_exp (Fun((name,NoOffset),func,$5)) loc1
     }
     | TLPAREN expression TRPAREN { $2 }
 ;

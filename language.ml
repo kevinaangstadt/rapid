@@ -2,7 +2,9 @@
  * Kevin Angstadt
  * Abstract Syntax for AP Language
  *)
- 
+
+open Util
+
 module StringSet = Set.Make(String)
 
 exception Syntax_error of string
@@ -17,6 +19,7 @@ type typ =
     | Array of typ
     | Automata
     | Boolean
+    | NoType (*Internal*)
 
 type literal =
     | StringLit of string * typ
@@ -32,26 +35,30 @@ type value =
     | BooleanValue of bool
     | AutomataElement of Automata.element
 
+type expression = {
+    exp : expression_kind ;
+    mutable expr_type : typ ;
+    loc : loc ;
+}
 
-
-type expression =
-    | EQ of expression * expression * typ option                    (* a0 == a1 *)
-    | NEQ of expression * expression * typ option                   (* a0 != a1 *)
-    | LEQ of expression * expression * typ option                   (* a0 <= a2 *)
-    | GEQ of expression * expression * typ option                   (* a0 >= a2 *)
-    | LT of expression * expression * typ option                    (* a0 < a2 *)
-    | GT of expression * expression * typ option                    (* a0 > a2 *) 
-    | Not of expression * typ option                                (* !b *)
-    | Negative of expression                                        (* -a0 *)
-    | And of expression * expression * typ option                   (* b0 && b1 *) 
-    | Or of expression * expression * typ option                    (* b0 || b1 *)
-    | Plus of expression * expression * typ option
-    | Minus of expression * expression * typ option
-    | Times of expression * expression * typ option
-    | Mod of expression * expression * typ option
-    | Lval of lval * typ option
+and expression_kind =
+    | EQ of expression * expression                 (* a0 == a1 *)
+    | NEQ of expression * expression                (* a0 != a1 *)
+    | LEQ of expression * expression                (* a0 <= a2 *)
+    | GEQ of expression * expression                (* a0 >= a2 *)
+    | LT of expression * expression                 (* a0 < a2 *)
+    | GT of expression * expression                 (* a0 > a2 *) 
+    | Not of expression                             (* !b *)
+    | Negative of expression                        (* -a0 *)
+    | And of expression * expression                (* b0 && b1 *) 
+    | Or of expression * expression                 (* b0 || b1 *)
+    | Plus of expression * expression
+    | Minus of expression * expression
+    | Times of expression * expression
+    | Mod of expression * expression
+    | Lval of lval
     | Lit of literal
-    | Fun of lval * string * arguments * typ option               (* var.fun(args)*)
+    | Fun of lval * string * arguments              (* var.fun(args)*)
     | Input
 
 and arguments = Arguments of expression list
@@ -155,22 +162,22 @@ and statement_to_str (a : statement) = match a with
         | Some(e) -> sprintf "%s;" (exp_to_str e)
         | None -> "NOP"
 
-and exp_to_str exp = match exp with
-    | EQ(a,b,_)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
-    | NEQ(a,b,_)      -> sprintf "(%s != %s)" (exp_to_str a) (exp_to_str b)
-    | LEQ(a,b,_)      -> sprintf "(%s <= %s)" (exp_to_str a) (exp_to_str b)
-    | GEQ(a,b,_)      -> sprintf "(%s >= %s)" (exp_to_str a) (exp_to_str b)
-    | LT(a,b,_)       -> sprintf "(%s < %s)"  (exp_to_str a) (exp_to_str b)
-    | GT(a,b,_)       -> sprintf "(%s > %s)"  (exp_to_str a) (exp_to_str b)
-    | Not(a,_)        -> sprintf "(!%s)"      (exp_to_str a)
+and exp_to_str exp = match exp.exp with
+    | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
+    | NEQ(a,b)      -> sprintf "(%s != %s)" (exp_to_str a) (exp_to_str b)
+    | LEQ(a,b)      -> sprintf "(%s <= %s)" (exp_to_str a) (exp_to_str b)
+    | GEQ(a,b)      -> sprintf "(%s >= %s)" (exp_to_str a) (exp_to_str b)
+    | LT(a,b)       -> sprintf "(%s < %s)"  (exp_to_str a) (exp_to_str b)
+    | GT(a,b)       -> sprintf "(%s > %s)"  (exp_to_str a) (exp_to_str b)
+    | Not(a)        -> sprintf "(!%s)"      (exp_to_str a)
     | Negative(a)   -> sprintf "-(%s)"    (exp_to_str a)
-    | And(a,b,_)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
-    | Or(a,b,_)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
-    | Plus(a,b,_)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
-    | Minus(a,b,_)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)
-    | Times(a,b,_)    -> sprintf "(%s * %s)"  (exp_to_str a) (exp_to_str b)
-    | Mod(a,b,_)      -> sprintf "(%s %% %s)" (exp_to_str a) (exp_to_str b)
-    | Lval(a,_)        -> lval_to_str a
+    | And(a,b)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
+    | Or(a,b)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
+    | Plus(a,b)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
+    | Minus(a,b)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)
+    | Times(a,b)    -> sprintf "(%s * %s)"  (exp_to_str a) (exp_to_str b)
+    | Mod(a,b)      -> sprintf "(%s %% %s)" (exp_to_str a) (exp_to_str b)
+    | Lval(a)        -> lval_to_str a
     | Lit(a)        -> begin match a with
                         | StringLit(x,typ) -> sprintf "\"%s\"" x
                         | IntLit(x,typ)    -> sprintf "%d" x
@@ -178,7 +185,7 @@ and exp_to_str exp = match exp with
                         | True             -> "true"
                         | False            -> "false"
                         end
-    | Fun(a,b,c,_)    -> sprintf "%s.%s(%s)" (lval_to_str a) b (args_to_str c)
+    | Fun(a,b,c)    -> sprintf "%s.%s(%s)" (lval_to_str a) b (args_to_str c)
     | Input         -> "input()"
     
 
