@@ -5,15 +5,6 @@
 open Parse
 open Util
 
-let string_buff = Buffer.create 256
-
-let reset_string () = Buffer.clear string_buff
-
-let store_char c = Buffer.add_char string_buff c
-
-let get_string () = Buffer.contents string_buff
-
-
 } 
 
 let blank = [' ' '\t']
@@ -39,7 +30,6 @@ rule initial = parse
     | "String"  { TSTRING(where lexbuf) }
     | "int"     { TINT(where lexbuf) }
     | "char"    { TCHAR(where lexbuf) }
-    | "list"    { TLIST(where lexbuf) }
     | "Counter" { TCOUNTER(where lexbuf) }
     | "macro"   { TMACRO(where lexbuf) }
     | "network" { TNETWORK(where lexbuf) }
@@ -81,13 +71,11 @@ rule initial = parse
             IDENT(str,(where lexbuf))
     }
     
-    | '"' {
-        reset_string () ;
-        string lexbuf ;
-        STRINGLIT(get_string (),(where lexbuf))
+    | '"' (([^'\000''"''\n''\\'] | ('\\'_))* as str) '"' {
+        STRINGLIT(str,(where lexbuf))
     }
     
-    | ('\'')(_)('\'') {
+    | '\'' (([^'\000''\'''\n''\\'] | ('\\'_))* as str) '\'' {
         let str = Lexing.lexeme lexbuf in
             CHARLIT(String.get str 1, (where lexbuf))
     }
@@ -96,13 +84,6 @@ rule initial = parse
     | _         {
         Printf.printf "invalid character '%s'\n" (Lexing.lexeme lexbuf) ;
         exit 1 (*FIXME Nice error handling needed here*)
-    }
-
-and string = parse
-    | '"'       { () }
-    | _ as c    {
-        store_char c;
-        string lexbuf
     }
 
 and comment = parse

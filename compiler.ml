@@ -6,7 +6,6 @@
 open Language (* Contains all the types for the AP language *)
 open Id (*For counting on IDs*)
 open Util
-open Tc
 
 let explode s =
     let rec exp i l =
@@ -21,23 +20,56 @@ let symbol_scope = ref StringSet.empty
 let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 10
 let net = Automata.create "" ""
 
+let symbol_variable_lookup (v : string) =
+    begin try
+    let var = Hashtbl.find symbol_table v in
+        begin
+        match var with
+            | Variable(_,_,_) as return -> return
+            | _ -> raise (Syntax_error "")
+        end
+        with Not_found -> raise (Syntax_error "")
+        end
+
 let if_seed = new_seed ()
 let c_seed = new_seed ()
 let while_seed = new_seed ()
+
+let get_exp_type exp =
+    match exp with
+    | EQ(_,_,Some t)
+    | NEQ(_,_,Some t)
+    | LEQ(_,_,Some t)
+    | GEQ(_,_,Some t)
+    | LT(_,_,Some t)
+    | GT(_,_,Some t)
+    | Not(_,Some t)
+    | And(_,_,Some t)
+    | Or(_,_,Some t)
+    | Plus(_,_,Some t)
+    | Minus(_,_,Some t)
+    | Times(_,_,Some t)
+    | Mod(_,_,Some t)
+    | Fun(_,_,_,Some t)
+    | Lval(_,Some t) -> t
+    | Negative(_) -> Int
+    | Lit(l) ->
+        begin match l with
+        | StringLit(_,t)
+        | IntLit(_,t)
+        | CharLit(_,t)-> t
+        | True | False -> Boolean
+        end
+    | Input -> Automata
+
 
 let evaluate_report last=
     Automata.set_report net last true
 
 let is_counter exp =
-    match exp with
-        | Var(a) -> begin try
-            let _ = Hashtbl.find counter_rename a in
-                true
-            with Not_found -> false
-            end
-        | _ -> false
+    (get_exp_type exp) = Counter
             
-let is_counter_expression exp =
+(*let is_counter_expression exp =
     match exp with
         | EQ(a,b)
         | NEQ(a,b)
@@ -45,7 +77,7 @@ let is_counter_expression exp =
         | GEQ(a,b)
         | LT(a,b)
         | GT(a,b) -> is_counter a || is_counter b
-        | _ -> false
+        | _ -> false*)
         
 let rec add_all net (e:Automata.element) =
     let connect = Automata.get_connections e in
@@ -55,9 +87,10 @@ let rec add_all net (e:Automata.element) =
 
 let rec evaluate_statement (stmt : statement) (last : string list) : string list =
     match stmt with
-        | Report(scope) -> List.iter (fun s->evaluate_report s) last ; last
-        | Block(b,scope) -> List.fold_left (fun last a -> evaluate_statement a last) last b
-        | IfWhile(exp,then_clause,else_clause,while_stmt,scope) ->
+        | Report -> List.iter (fun s->evaluate_report s) last ; last
+        | Block(b) -> List.fold_left (fun last a -> evaluate_statement a last) last b
+        | If(exp,then_clause,_)
+        | While(exp,then_clause) ->
             begin
             let id = Printf.sprintf "if_%d" (get_num if_seed) in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
@@ -104,8 +137,12 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     | [] -> fb := StringSet.add ("n"^id) (StringSet.add id !fb) ; ()
                 end in
             
+            let else_clause = match stmt with
+                | If(_,_,e) -> e
+                | While(_,_) -> ExpStmt(None)
+            in
             match evaluate_expression exp None id (new_seed ()) with
-            | CounterExp(c,n,if_exp,yes,no,loop) when not while_stmt ->
+            | CounterExp(c,n,if_exp,yes,no,loop) ->
             (*if this is a counter experession*)
                 begin
                 (*(c, (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb)*)
@@ -151,55 +188,38 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 ) if_exp ;
                 let true_last = evaluate_statement then_clause (StringSet.elements !tb) in
                 let false_last = evaluate_statement else_clause (StringSet.elements !fb) in
-                    if while_stmt then
-                    begin
-                        List.iter (fun e ->
+                    match stmt with
+                    | While(_,_) -> List.iter (fun e ->
                                     List.iter (fun s -> Automata.connect net s (Automata.get_id e) None ;
                                                         Automata.connect net s ("n_"^(Automata.get_id e)) None
                                                         ) true_last
-                                    ) if_exp ;
-                        false_last
-                    end
-                    else
-                        true_last @ false_last
+                                    ) if_exp ; true_last @ false_last
+                    | If(_,_,_) -> true_last @ false_last
                 end
             | BooleanExp(b) ->
                 if b then evaluate_statement then_clause last
                 else evaluate_statement else_clause last
             end
-        | ForEach((Param(name,t)),source,f,scope) ->
+        | ForEach((Param((name,o),t)),source,f) ->
             begin
-            match source with
-                | Var(v) -> (*TODO error handling*)
-                    let Variable(_,_,value) = Hashtbl.find symbol_table v in
-                    match value with
-                        | None -> raise Uninitialized_variable
-                        | Some value ->
-                            begin
-                            match value with
-                                | StringValue(s) ->
-                                    if t = Char then
-                                        let s = explode s in
-                                        List.fold_left (fun last c ->
-                                            let c = CharValue(c) in
-                                            (*set binding to 'name'*)
-                                            Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                                            let return = evaluate_statement f last in
-                                            (*remove binding*)
-                                            Hashtbl.remove symbol_table name ; return
-                                        ) last s
-                                    else
-                                        raise Syntax_error
-                                | _ -> raise Syntax_error
-                            end
+            let obj = evaluate_expression source None "" (new_seed ()) in
+            match obj with
+            | StringExp(s) ->
+                let s = explode s in
+                    List.fold_left (fun last c ->
+                        let c = CharValue(c) in
+                        (*set binding to 'name'*)
+                        Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                        let return = evaluate_statement f last in
+                        (*remove binding*)
+                        Hashtbl.remove symbol_table name ; return
+                    ) last s
+            (* TODO add some sort of array exp*)
             end
-        | VarDec(var,scope) ->
+        | VarDec(var) ->
             begin
-            List.iter (fun (s,t,init) ->
+            List.iter (fun ((s,o),t,init) ->
                 (*TODO support list*)
-                let s = match s with
-                    | Var(a) -> a
-                in
                 let (id,value) =
                     match t with
                     | Counter ->
@@ -209,16 +229,18 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         let _ = Hashtbl.add symbol_table s (Variable(id,t,None)) in
                         symbol_scope := StringSet.add s !symbol_scope ;
                         (id, Some (AutomataElement(Automata.Counter(id,100,Automata.Pulse,false,[]))))
-                    | _ -> let x = match init with
-                                    | None -> None
-                                    | Some i -> begin match i with
-                                        | PrimitiveInit(e) ->
-                                            let v = evaluate_expression e None "" (new_seed ()) in
-                                            match v with
-                                                | BooleanExp(b) -> Some (BooleanValue(b))
-                                                | IntExp(b) -> Some (IntValue(b))
-                                        end
-                            in (s,x) in
+                    | _ ->
+                        let x = match init with
+                            | None -> None
+                            | Some i -> begin match i with
+                                | PrimitiveInit(e) ->
+                                    let v = evaluate_expression e None "" (new_seed ()) in
+                                    match v with
+                                        | BooleanExp(b) -> Some (BooleanValue(b))
+                                        | IntExp(b) -> Some (IntValue(b))
+                                        | StringExp(s) -> Some (StringValue(s))
+                                end
+                        in (s,x) in
                 (* TODO We need some notion of scope to remove these after the fact! *)
                 Hashtbl.add symbol_table id (Variable(id,t,value)) ;
                 symbol_scope := StringSet.add id !symbol_scope ;
@@ -227,53 +249,23 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             last (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
         (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (evaluate_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
-        | MacroCall(a,Arguments(b),scope) -> begin
+        | MacroCall(a,Arguments(b)) -> begin
             (* Look up macro in the symbol table, make sure it is there *)
             (* TODO does this need to be error-checked? *)
-            let called_function = Hashtbl.find symbol_table a in
-            match called_function with
-                | MacroContainer(Macro(name,Parameters(params),stmts) as m) ->
-                    begin
-                    (*make sure the arguments are correct*)
-                    
-                    List.iter2 (fun (arg:expression) (p:param) -> match arg with
-                        | Var(s) ->
-                            let Variable(ident,t,value) = Hashtbl.find symbol_table s in
-                                begin
-                                match p with Param(e,t2) ->
-                                    if not (t = t2) then raise Type_mismatch
-                                end
-                        | Lit(l) ->
-                            begin
-                            match l with
-                                | StringLit(_,t)
-                                | IntLit(_,t)
-                                | CharLit(_,t) ->
-                                    begin
-                                    match p with Param(e,t2) ->
-                                        if not (t = t2) then raise Type_mismatch
-                                    end
-                                | _ -> raise Syntax_error
-                            end
-                        | _ -> raise Syntax_error
-                    ) b params
-                    ;
-                    (*evaluate macro*)
-                    evaluate_macro m b last
-                       
-                    end
-                | _ -> raise Syntax_error
+            let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find symbol_table a in
+                (*evaluate macro*)
+                evaluate_macro m b last
             end
-        | ExpStmt(exp,scope) ->
+        | ExpStmt(exp) ->
             begin
             match exp with
                 | None -> last
                 | Some e -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
             end
-        | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise Syntax_error
+        | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
-    match get_type exp symbol_table with
+    match get_exp_type exp with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
         | Automata -> AutomataExp(evaluate_expression_aut exp s prefix seed)
@@ -284,20 +276,16 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
         begin
         match v with
             | Lit(CharLit(a,_)) -> a
-            | Var(a) -> begin try
-                let var = Hashtbl.find symbol_table a in
-                begin
-                match var with
-                    | Variable(name,typ,Some CharValue(s)) ->
-                        if typ = Char then s else raise Syntax_error
-                    | _ -> raise Syntax_error
-                end
-                with Not_found -> raise Syntax_error
-                end
-            | _ -> raise Syntax_error
+            | Lval((n,o),_) ->
+                let (Variable(name,typ,Some v)) = Hashtbl.find symbol_table n in
+                match o with
+                | NoOffset ->
+                    begin match v with
+                    | CharValue(s) -> s
+                    end
         end in
     match exp with
-        | EQ(a,b) -> begin
+        | EQ(a,b,_) -> begin
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
                     | None -> [new_element]
@@ -311,9 +299,9 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
             else if b = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),Automata.NotStart,false,[],false) in
                 helper new_element
-            else raise Syntax_error 
+            else raise (Syntax_error "Something with Input")
             end
-        | NEQ(a,b) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
+        | NEQ(a,b,_) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
                     | None -> [new_element]
@@ -327,12 +315,12 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
             else if b = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value a)),Automata.NotStart,false,[],false) in
                 helper new_element
-            else raise Syntax_error 
+            else raise (Syntax_error "Something with Input")
             end
         (*| LEQ(a,b)
         | LT(a,b)
         | GT(a,b)*)
-        | Not(a) -> (* TODO This is a copied and modified from the if-statement.  Need to combine/consolidate *)
+        | Not(a,_) -> (* TODO This is a copied and modified from the if-statement.  Need to combine/consolidate *)
             begin
             let temp_net = Automata.create "tmp" "" in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
@@ -393,7 +381,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
             ) [] if_exp
             end
         (*| Negative(a)*)
-        | And(a,b) ->
+        | And(a,b,_) ->
             let rec add_to_last (Automata.STE(id,set,strt,latch,connect,report) as start) x =
                 match connect with
                 | hd :: tl -> Automata.STE(id,set,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
@@ -408,24 +396,24 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                 | None -> a_eval
                 | Some x -> List.map (fun a -> add_to_last a x) a_eval
             end
-        | Or(a,b) ->
+        | Or(a,b,_) ->
             (*TODO Do we do this here, or at a later optimization stage?*)
             let rec build_charset c =
                 match c with
-                    | EQ(a,b)
-                    | NEQ(a,b) ->
+                    | EQ(a,b,_)
+                    | NEQ(a,b,_) ->
                         if a = Input then Char.escaped (get_value b)
                         else if b = Input then Char.escaped (get_value a)
-                        else raise Syntax_error
-                    | Or(a,b) -> (build_charset a) ^ (build_charset b)
+                        else raise (Syntax_error "Input is messed up")
+                    | Or(a,b,_) -> (build_charset a) ^ (build_charset b)
                     | _ -> ""
                 in
             let rec can_condense c =
                 match c with
-                    | EQ(_,_)
-                    | NEQ(_,_) -> true
-                    | Or(a,b) -> (can_condense a) && (can_condense b)
-                    | And(_,_) -> false
+                    | EQ(_,_,_)
+                    | NEQ(_,_,_) -> true
+                    | Or(a,b,_) -> (can_condense a) && (can_condense b)
+                    | And(_,_,_) -> false
                 in
             if can_condense a then
                 if can_condense b then
@@ -450,50 +438,39 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     let a_eval = evaluate_expression_aut a s prefix seed in
                     let b_eval = evaluate_expression_aut b s prefix seed in
                     a_eval @ b_eval
-        | Fun(a,b,c) ->
+        | Fun((a,_),b,c,_) ->
             begin match b with
                 | "count" ->
-                    begin try
+                    begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
                     let last = match s with Some x -> x in
-                    begin
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
                                 | Some AutomataElement(x) -> x in
-                            (*Check that we have a counter*)
-                            if t = Counter then
-                                begin
-                                if not (Automata.contains net c) then Automata.add_element net c ;
-                                List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "cnt")) last ; []
-                                end
-                            else raise Type_mismatch
-                        | _ -> raise Type_mismatch
-                    end
-                    with Not_found -> raise Syntax_error
+                            begin
+                            if not (Automata.contains net c) then Automata.add_element net c ;
+                            List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "cnt")) last ; []
+                            end
+                            
                     end
                 | "reset" ->
-                    begin try
+                    begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
                     let last = match s with Some x -> x in
-                    begin
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
                                 | Some AutomataElement(x) -> x in
                             (*Check that we have a counter*)
-                            if t = Counter then
-                                begin
-                                if not (Automata.contains net c) then Automata.add_element net c ;
-                                List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "rst")) last ; []
-                                end
-                            else raise Type_mismatch
-                        | _ -> raise Type_mismatch
+                            begin
+                            if not (Automata.contains net c) then Automata.add_element net c ;
+                            List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "rst")) last ; []
+                            end
                     end
-                    with Not_found -> raise Syntax_error
-                    end
+
             end
         (*| Var(a)
         | Lit(a)
@@ -503,24 +480,11 @@ and evaluate_counter_expression (exp : expression) =
     let get_counter v =
         begin
         match v with
-            | Var(a) -> try
+            | Lval((a,_),_) ->
                 let id = Hashtbl.find counter_rename a in
-                let var = Hashtbl.find symbol_table id in
-                begin
-                match var with
-                    | Variable(name,typ, Some (AutomataElement(e))) ->
-                        if typ = Counter then (Automata.get_id e) else raise Syntax_error
-                    | _ -> raise Syntax_error
-                end
-                with Not_found -> raise Syntax_error
-            | _ -> raise Syntax_error
-        end in
-    (*TODO determine if we need to do this*)
-    let kill_counter (Var(a)) =
-        begin
-            let id = Hashtbl.find counter_rename a in
-            Hashtbl.remove symbol_table id ;
-            Hashtbl.remove counter_rename a
+                let (Variable(name,typ, Some (AutomataElement(e)))) = Hashtbl.find symbol_table id in
+                    Automata.get_id e
+                
         end in
     let helper num c =
         begin
@@ -541,57 +505,56 @@ and evaluate_counter_expression (exp : expression) =
             end in
         let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t" c a) (range low high) in
         let (tb,fb) = match exp with
-            | EQ(_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
-            | GT(_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
-            | GEQ(_,_) -> ( state_list num (num + 2) , state_list 0 num )
-            | LEQ(_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
-            | LT(_,_) ->( state_list 0 num , state_list num (num + 2) ) in
+            | EQ(_,_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
+            | GT(_,_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
+            | GEQ(_,_,_) -> ( state_list num (num + 2) , state_list 0 num )
+            | LEQ(_,_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
+            | LT(_,_,_) ->( state_list 0 num , state_list num (num + 2) ) in
         
         (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1))
         end in
     (*if counter is not listed first, flip it!*)
     match exp with
-        | EQ(a,b) -> if is_counter b then evaluate_counter_expression (EQ(b,a))
+        | EQ(a,b,t) -> if is_counter b then evaluate_counter_expression (EQ(b,a,t))
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GT(a,b) -> if is_counter b then evaluate_counter_expression (LEQ(b,a))
+        | GT(a,b,t) -> if is_counter b then evaluate_counter_expression (LEQ(b,a,t))
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GEQ(a,b) -> if is_counter b then evaluate_counter_expression (LT(b,a))
+        | GEQ(a,b,t) -> if is_counter b then evaluate_counter_expression (LT(b,a,t))
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LEQ(a,b) -> if is_counter b then evaluate_counter_expression (GT(b,a))
+        | LEQ(a,b,t) -> if is_counter b then evaluate_counter_expression (GT(b,a,t))
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LT(a,b) -> if is_counter b then evaluate_counter_expression (GEQ(b,a))
+        | LT(a,b,t) -> if is_counter b then evaluate_counter_expression (GEQ(b,a,t))
                      else
                         helper (evaluate_int_expression b) (get_counter a)
 
 and evaluate_boolean_expression exp =
     match exp with
-        | EQ(a,b) ->
-            begin match get_type a symbol_table with
+        | EQ(a,b,_) ->
+            begin match get_exp_type a with
                 | Boolean -> (evaluate_boolean_expression a) = (evaluate_boolean_expression b)
                 | Int -> (evaluate_int_expression a) = (evaluate_int_expression b)
                 | Char -> (evaluate_char_expression a) = (evaluate_char_expression b)
             end
-        | NEQ(a,b) ->
-            begin match get_type a symbol_table with
+        | NEQ(a,b,_) ->
+            begin match get_exp_type a with
                 | Boolean -> (evaluate_boolean_expression a) <> (evaluate_boolean_expression b)
                 | Int -> (evaluate_int_expression a) <> (evaluate_int_expression b)
                 | Char -> (evaluate_char_expression a) <> (evaluate_char_expression b)
             end
-        | LEQ(a,b) -> (evaluate_int_expression a) <= (evaluate_int_expression b)
-        | GEQ(a,b) -> (evaluate_int_expression a) >= (evaluate_int_expression b)
-        | LT(a,b) -> (evaluate_int_expression a) < (evaluate_int_expression b)
-        | GT(a,b) -> (evaluate_int_expression a) > (evaluate_int_expression b)
-        | Not(a) -> not (evaluate_boolean_expression a)
-        | And(a,b) -> (evaluate_boolean_expression a) && (evaluate_boolean_expression b)
-        | Or(a,b) -> (evaluate_boolean_expression a) || (evaluate_boolean_expression b)
-        | Var(a) -> let Variable(n,t,(Some v)) = symbol_variable_lookup a symbol_table in
-            begin match v with
-                | BooleanValue(b) -> b
-            end
+        | LEQ(a,b,_) -> (evaluate_int_expression a) <= (evaluate_int_expression b)
+        | GEQ(a,b,_) -> (evaluate_int_expression a) >= (evaluate_int_expression b)
+        | LT(a,b,_) -> (evaluate_int_expression a) < (evaluate_int_expression b)
+        | GT(a,b,_) -> (evaluate_int_expression a) > (evaluate_int_expression b)
+        | Not(a,_) -> not (evaluate_boolean_expression a)
+        | And(a,b,_) -> (evaluate_boolean_expression a) && (evaluate_boolean_expression b)
+        | Or(a,b,_) -> (evaluate_boolean_expression a) || (evaluate_boolean_expression b)
+        | Lval((a,o),_) ->
+            let Variable(n,t,(Some (BooleanValue(b)))) = symbol_variable_lookup a in
+                b
         | Lit(a) -> begin match a with
                       | True -> true
                       | False -> false
@@ -600,39 +563,39 @@ and evaluate_boolean_expression exp =
 and evaluate_int_expression exp =
     match exp with
         | Negative(a) -> - (evaluate_int_expression a)
-        | Var(a) -> let Variable(n,t,(Some v)) = symbol_variable_lookup a symbol_table in
-            begin match v with
-                | IntValue(i) -> i
-            end
+        | Lval((a,o),_) ->
+            let Variable(n,t,(Some (IntValue(i)))) = symbol_variable_lookup a in
+                i
         | Lit(a) -> begin match a with
                       | IntLit(x,_) -> x
                     end
-        | Fun(a,b,c) -> let Variable(n,t,(Some (StringValue(v)))) = symbol_variable_lookup a symbol_table in
+        | Fun((a,o),b,c,_) ->
+            let (Variable(n,t,(Some (StringValue(v))))) = symbol_variable_lookup a in
                 begin match b with
                     | "length" -> String.length v
                 end
 and evaluate_char_expression exp =
     match exp with
-        | Var(a) -> let Variable(n,t,(Some v)) = symbol_variable_lookup a symbol_table in
-            begin match v with
-                | CharValue(c) -> c
-            end
+        | Lval((a,o),_) ->
+            let Variable(n,t,(Some (CharValue(c)))) = symbol_variable_lookup a in
+                c
         | Lit(a) -> begin match a with
                       | CharLit(x,_) -> x
                     end
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
-    List.iter2 (fun (Param(p,t)) arg ->
+    List.iter2 (fun (Param((p,o),t)) arg ->
         let value =
             begin
+            (*TODO allow for offsets*)
             match arg with
-                | Var(s) ->
+                | Lval((s,o2),_) ->
                     let variable = Hashtbl.find symbol_table s in
                     begin
                     match variable with
                         | Variable(name,t,value) -> value
-                        | _ -> raise Syntax_error
+                        | _ -> raise (Syntax_error "")
                     end
                 | Lit(l) ->
                     begin
@@ -646,43 +609,30 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
     ) params args ;
     (* verify that we have a block; evalutate it *)
     let return = (match stmt with
-        | Block(b,scope) -> evaluate_statement stmt last
-        | _ -> raise Syntax_error
+        | Block(b) -> evaluate_statement stmt last
     ) in  begin
     (* remove those bindings again *)
-    List.iter(fun (Param(p,t)) -> Hashtbl.remove symbol_table p) params ;
+    List.iter(fun (Param((p,o),t)) -> Hashtbl.remove symbol_table p) params ;
     StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
     symbol_scope := StringSet.empty ;
     end ; return
 
 let compile (Program(macros,network)) name =
-    let verify_network_params (Parameters(p)) =
-        List.iter (fun param -> match param with
-                                | Param(exp,typ) -> begin
-                                    match typ with
-                                    | Counter -> (Printf.printf "param error 2!" ; exit 1)
-                                    | _ -> ()
-                                end
-        ) p in
+    
         
     (* Add the macros to the symbol table *)
     List.iter (fun ((Macro(name,params,stmts)) as m) ->
                     Hashtbl.add symbol_table name (MacroContainer(m))) macros
     ;
     match network with
-        | Network(params,stmt) -> begin
-            verify_network_params params ;
+        | Network(params,(Block(b))) -> begin
             let seed = new_seed () in
-            match stmt with
-                | Block(b,s) -> begin
-                    List.iter (fun s ->
-                        let start_str = Printf.sprintf "start_%d" (get_num seed) in
-                        let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
-                        let _ = Automata.add_element net start in
-                        evaluate_statement s [start_str] ; () ) b
-                    end
-                | _ -> (Printf.printf "network error!" ; exit 1)
-            end
+                List.iter (fun s ->
+                    let start_str = Printf.sprintf "start_%d" (get_num seed) in
+                    let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
+                    let _ = Automata.add_element net start in
+                    evaluate_statement s [start_str] ; () ) b
+                end
     ;
     Automata.set_name net name ;
     (Automata.network_to_str net)

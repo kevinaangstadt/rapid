@@ -6,8 +6,6 @@
  
  open Language
  
- let scope = ref NetworkScope
- 
 %}
 
 %token  <int*Util.loc>    INT
@@ -82,24 +80,24 @@ macro_list:
 macro:
       TMACRO IDENT TLPAREN params TRPAREN block {
         let ident,loc = $2 in
-        scope := MacroScope ; Macro(ident,$4,$6)
+            Macro(ident,$4,$6)
         }
 ;
 
 network:
-      TNETWORK TLPAREN params TRPAREN block { scope := NetworkScope ; Network($3,$5) }
+      TNETWORK TLPAREN params TRPAREN block { Network($3,$5) }
 ;
 
 void: { } ;
 
 params:
-      void { Parameters( [] ) }
-    | param_list { Parameters($1) }
+    | /* empty */ { Parameters( [] ) }
+    | param_list  { Parameters($1) }
 ;
 
 param_list:
-      input_variable { [$1] }
-    | input_variable TCOMMA param_list { $1 :: $3 }
+      formal_param_dec { [$1] }
+    | formal_param_dec TCOMMA param_list { $1 :: $3 }
 ;
 
 args:
@@ -112,14 +110,28 @@ arg_list:
     | operand TCOMMA arg_list { $1 :: $3 }
 ;
 
-input_variable:
-      typ IDENT {
-        let name,loc = $2 in
-            Param(name, $1)
+formal_param_dec:
+      typ abstract_declarator {
+        let rec create_type level =
+            if level = 0 then $1
+            else Array((create_type (level - 1)))
+        in
+        let name,level = $2 in
+            Param((name,NoOffset), (create_type level))
+    }
+    
+abstract_declarator:
+      IDENT {
+        let name,loc = $1 in
+            (name,0)
+    }
+    | abstract_declarator TLBRACKET TRBRACKET {
+        let name,level = $1 in
+            (name,level+1)
     }
 
 block:
-      TLBRACE statement_list TRBRACE { Block($2,!scope) }
+      TLBRACE statement_list TRBRACE { Block($2) }
 ;
 
 statement_list:
@@ -132,24 +144,20 @@ statement:
     | foreach_statement { $1 }
     | while_statement { $1 }
     | block { $1 }
-    | TREPORT TSEMICOLON { Report(!scope) }
+    | TREPORT TSEMICOLON { Report }
     | declaration { $1 }
     | expression_statement { $1 }
     | IDENT TLPAREN args TRPAREN TSEMICOLON {
         let name,loc = $1 in
-            MacroCall(name,$3,!scope)
+            MacroCall(name,$3)
     }
 ;
 
 declaration:
       typ declarator_list {
         let dec_list = List.map (fun (name,value) -> (name,$1,value)) $2 in
-        VarDec(List.rev dec_list,!scope)
+        VarDec(List.rev dec_list)
     }
-    /*  typ IDENT TSEMICOLON {
-        let name,loc = $2 in
-            VarDec(name,$1,!scope)
-    } */
 ;
 
 declarator_list:
@@ -163,9 +171,9 @@ declarator:
 ;
 
 direct_declarator:
-      IDENT { let(a,loc) = $1 in Var(a) }
-    | direct_declarator TLBRACKET TRBRACKET { ListVar($1,None) }
-    | direct_declarator TLBRACKET expression TRBRACKET { ListVar($1,Some $3) }
+      IDENT { let(a,loc) = $1 in (a,NoOffset) }
+    /*| direct_declarator TLBRACKET TRBRACKET {  }
+    | direct_declarator TLBRACKET expression TRBRACKET {  }*/
 ;
 
 initialize:
@@ -184,24 +192,23 @@ typ:
     | TSTRING { String }
     | TCHAR { Char }
     | TCOUNTER { Counter }
-    | TLIST { List }
 ;
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { IfWhile($3,$5,Block([],!scope),false,!scope) }
-    | TIF TLPAREN expression TRPAREN statement TELSE statement { IfWhile($3,$5,$7,false,!scope) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }
+    | TIF TLPAREN expression TRPAREN statement TELSE statement { If($3,$5,$7) }
 ;
 
 foreach_statement:
-      TFOREACH TLPAREN input_variable TCOLON operand TRPAREN statement { ForEach($3,$5,$7,!scope) }
+      TFOREACH TLPAREN formal_param_dec TCOLON operand TRPAREN statement { ForEach($3,$5,$7) }
 ;
 
 while_statement:
-      TWHILE TLPAREN expression TRPAREN statement { IfWhile($3,$5,ExpStmt(None,!scope),true,!scope) }
+      TWHILE TLPAREN expression TRPAREN statement { While($3,$5) }
 
 expression_statement:
-      expression TSEMICOLON { ExpStmt(Some $1,!scope) }
-    | TSEMICOLON { ExpStmt(None,!scope) }
+      expression TSEMICOLON { ExpStmt(Some $1) }
+    | TSEMICOLON { ExpStmt(None) }
 ;
 
 expression:
@@ -210,42 +217,42 @@ expression:
 
 disjunction:
       conjunction                   { $1 }
-    | disjunction TOR conjunction   { Or($1,$3) }
+    | disjunction TOR conjunction   { Or($1,$3,None) }
 ;
 
 conjunction:
       equality                      { $1 }
-    | conjunction TAND equality     { And($1,$3) }
+    | conjunction TAND equality     { And($1,$3,None) }
 ;
 
 /*(* TODO: Does this make sense to not allow chaining? *)*/
 equality:
       relation                      { $1 }
-    | relation TEQ relation         { EQ($1,$3) }
-    | relation TNEQ relation        { NEQ($1,$3) }
+    | relation TEQ relation         { EQ($1,$3,None) }
+    | relation TNEQ relation        { NEQ($1,$3,None) }
 ;
 
 relation:
       addition                      { $1 }
-    | relation TLEQ addition        { LEQ($1,$3) }
-    | relation TGEQ addition        { GEQ($1,$3) }
-    | relation TGT addition         { GT($1,$3) }
-    | relation TLT addition         { LT($1,$3) }
+    | relation TLEQ addition        { LEQ($1,$3,None) }
+    | relation TGEQ addition        { GEQ($1,$3,None) }
+    | relation TGT addition         { GT($1,$3,None) }
+    | relation TLT addition         { LT($1,$3,None) }
 ;
 
 addition:
       multiplication                { $1 }
-    | addition TPLUS multiplication { Plus($1,$3) }
-    | addition TMINUS multiplication{ Minus($1,$3) }
+    | addition TPLUS multiplication { Plus($1,$3,None) }
+    | addition TMINUS multiplication{ Minus($1,$3,None) }
 ;
 
 multiplication:
       negation                      { $1 }
-    | multiplication TTIMES negation{ Times($1,$3) }
-    | multiplication TMOD negation  { Mod($1,$3) }
+    | multiplication TTIMES negation{ Times($1,$3,None) }
+    | multiplication TMOD negation  { Mod($1,$3,None) }
 
 negation:
-    | TNOT operand                  { Not($2) }
+    | TNOT operand                  { Not($2,None) }
     | TMINUS operand %prec UMINUS   { Negative($2) }
     | operand                       { $1 }
 ;
@@ -253,14 +260,15 @@ negation:
 operand:
       literal { Lit($1) }
     | TINPUT TLPAREN TRPAREN { Input }
-    | IDENT {
+    /* TODO make this actually for lvals */
+    | IDENT {  
         let name,loc = $1 in
-            Var(name)
+            Lval((name,NoOffset),None)
         }
     | IDENT TDOT IDENT TLPAREN args TRPAREN {
         let name,loc1 = $1 in
         let func,loc2 = $3 in
-            Fun(name,func,$5)
+            Fun((name,NoOffset),func,$5,None)
     }
     | TLPAREN expression TRPAREN { $2 }
 ;

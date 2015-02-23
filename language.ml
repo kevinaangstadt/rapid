@@ -5,8 +5,7 @@
  
 module StringSet = Set.Make(String)
 
-exception Syntax_error
-exception Type_mismatch
+exception Syntax_error of string
 exception Uninitialized_variable
 exception Negative_count
 
@@ -15,7 +14,7 @@ type typ =
     | Int
     | Char
     | Counter
-    | List
+    | Array of typ
     | Automata
     | Boolean
 
@@ -33,30 +32,37 @@ type value =
     | BooleanValue of bool
     | AutomataElement of Automata.element
 
+
+
 type expression =
-    | EQ of expression * expression                     (* a0 == a1 *)
-    | NEQ of expression * expression                    (* a0 != a1 *)
-    | LEQ of expression * expression                    (* a0 <= a2 *)
-    | GEQ of expression * expression                    (* a0 >= a2 *)
-    | LT of expression * expression                     (* a0 < a2 *)
-    | GT of expression * expression                     (* a0 > a2 *) 
-    | Not of expression                                 (* !b *)
-    | Negative of expression                            (* -a0 *)
-    | And of expression * expression                    (* b0 && b1 *) 
-    | Or of expression * expression                     (* b0 || b1 *)
-    | Plus of expression * expression
-    | Minus of expression * expression
-    | Times of expression * expression
-    | Mod of expression * expression
-    | Var of string
-    | ListVar of expression * expression option
+    | EQ of expression * expression * typ option                    (* a0 == a1 *)
+    | NEQ of expression * expression * typ option                   (* a0 != a1 *)
+    | LEQ of expression * expression * typ option                   (* a0 <= a2 *)
+    | GEQ of expression * expression * typ option                   (* a0 >= a2 *)
+    | LT of expression * expression * typ option                    (* a0 < a2 *)
+    | GT of expression * expression * typ option                    (* a0 > a2 *) 
+    | Not of expression * typ option                                (* !b *)
+    | Negative of expression                                        (* -a0 *)
+    | And of expression * expression * typ option                   (* b0 && b1 *) 
+    | Or of expression * expression * typ option                    (* b0 || b1 *)
+    | Plus of expression * expression * typ option
+    | Minus of expression * expression * typ option
+    | Times of expression * expression * typ option
+    | Mod of expression * expression * typ option
+    | Lval of lval * typ option
     | Lit of literal
-    | Fun of string * string * arguments                (* var.fun(args)*)
+    | Fun of lval * string * arguments * typ option               (* var.fun(args)*)
     | Input
 
 and arguments = Arguments of expression list
 
-type param = Param of string * typ
+and offset =
+    | NoOffset
+    | Index of expression * offset
+
+and lval = string * offset
+
+type param = Param of lval * typ
     
 type parameters = Parameters of param list
 
@@ -67,15 +73,15 @@ type initialize =
     | ArrayInit of initialize list
 
 type statement =
-    | Report of scope
-    | Block of statement list * scope 
-    | IfWhile of expression * statement * statement * bool * scope
-    | ForEach of param * expression * statement * scope
-    | While of expression * statement * scope
-    | VarDec of (expression * typ * initialize option) list * scope
-    | Assign of string * expression * scope
-    | ExpStmt of expression option * scope
-    | MacroCall of string * arguments * scope
+    | Report
+    | Block of statement list 
+    | If of expression * statement * statement
+    | ForEach of param * expression * statement
+    | While of expression * statement
+    | VarDec of (lval * typ * initialize option) list
+    | Assign of lval * expression
+    | ExpStmt of expression option 
+    | MacroCall of string * arguments
 
 type macro = Macro of string * parameters * statement
 
@@ -92,6 +98,7 @@ type exp_return =
     | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string)
     | BooleanExp of bool
     | IntExp of int
+    | StringExp of string
 type symbol = (string, container) Hashtbl.t
 
 
@@ -110,57 +117,60 @@ and typ_to_str t = match t with
     | Int ->    "int"
     | Char ->   "char"
     | Counter ->"Counter"
-    | List ->   "List"
+    | Array(t)->typ_to_str t
 
 and init_to_str i = match i with
     | PrimitiveInit(e) -> exp_to_str e
     | ArrayInit(a) -> sprintf "{ %s }" (List.fold_left (fun prev e -> sprintf "%s, %s" prev (init_to_str e)) "" a)
+
+and lval_to_str (n,o) =
+    let rec offset_to_str o = match o with
+        | NoOffset -> ""
+        | Index(e,o2) -> sprintf "[%s]%s" (exp_to_str e) (offset_to_str o2)
+    in sprintf "%s%s" n (offset_to_str o)
     
-and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) a 
+and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (lval_to_str a) 
 
 and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (sprintf "%s, " (param_to_str v))) "" a
 
 and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf "%s, " (exp_to_str v))) "" a
 
 and statement_to_str (a : statement) = match a with
-    | Report(_) -> "report;\n"
-    | Block(b,_) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" prev (statement_to_str s))) "" b)
-    | IfWhile(exp,t,e,w,_) -> if not w then sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
-                              else sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
-    | ForEach(var,exp,s,_) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
-    | VarDec(var,_) -> List.fold_left (fun prev (s,t,i) ->
-                                    let s = match s with
-                                        | Var(a) -> a
-                                        | ListVar(a,None) -> sprintf "%s[]" (exp_to_str a)
-                                        | ListVar(a,Some b) -> sprintf "%s[%s]" (exp_to_str a) (exp_to_str b)
+    | Report -> "report;\n"
+    | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" prev (statement_to_str s))) "" b)
+    | If(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
+    | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
+    | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
+    | VarDec(var) -> List.fold_left (fun prev (s,t,i) ->
+                                    let s = lval_to_str s
                                     in
                                     let new_var = match i with
                                         | None -> sprintf "%s %s;\n" (typ_to_str t) s
                                         | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)
                                     in prev ^ new_var
                                  ) "" var
-    | MacroCall(a,b,_)  -> sprintf "%s(%s);"   a (args_to_str b)
-    | ExpStmt(exp,_) ->
+    | MacroCall(a,b)  -> sprintf "%s(%s);"   a (args_to_str b)
+    | ExpStmt(exp) ->
         match exp with
         | Some(e) -> sprintf "%s;" (exp_to_str e)
         | None -> "NOP"
 
 and exp_to_str exp = match exp with
-    | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
-    | NEQ(a,b)      -> sprintf "(%s != %s)" (exp_to_str a) (exp_to_str b)
-    | LEQ(a,b)      -> sprintf "(%s <= %s)" (exp_to_str a) (exp_to_str b)
-    | GEQ(a,b)      -> sprintf "(%s >= %s)" (exp_to_str a) (exp_to_str b)
-    | LT(a,b)       -> sprintf "(%s < %s)"  (exp_to_str a) (exp_to_str b)
-    | GT(a,b)       -> sprintf "(%s > %s)"  (exp_to_str a) (exp_to_str b)
-    | Not(a)        -> sprintf "(!%s)"      (exp_to_str a)
+    | EQ(a,b,_)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
+    | NEQ(a,b,_)      -> sprintf "(%s != %s)" (exp_to_str a) (exp_to_str b)
+    | LEQ(a,b,_)      -> sprintf "(%s <= %s)" (exp_to_str a) (exp_to_str b)
+    | GEQ(a,b,_)      -> sprintf "(%s >= %s)" (exp_to_str a) (exp_to_str b)
+    | LT(a,b,_)       -> sprintf "(%s < %s)"  (exp_to_str a) (exp_to_str b)
+    | GT(a,b,_)       -> sprintf "(%s > %s)"  (exp_to_str a) (exp_to_str b)
+    | Not(a,_)        -> sprintf "(!%s)"      (exp_to_str a)
     | Negative(a)   -> sprintf "-(%s)"    (exp_to_str a)
-    | And(a,b)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
-    | Or(a,b)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
-    | Plus(a,b)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
-    | Minus(a,b)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)
-    | Times(a,b)    -> sprintf "(%s * %s)"  (exp_to_str a) (exp_to_str b)
-    | Mod(a,b)      -> sprintf "(%s %% %s)" (exp_to_str a) (exp_to_str b)
-    | Var(a)        -> a
+    | And(a,b,_)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
+    | Or(a,b,_)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
+    | Plus(a,b,_)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
+    | Minus(a,b,_)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)
+    | Times(a,b,_)    -> sprintf "(%s * %s)"  (exp_to_str a) (exp_to_str b)
+    | Mod(a,b,_)      -> sprintf "(%s %% %s)" (exp_to_str a) (exp_to_str b)
+    | Lval(a,_)        -> lval_to_str a
     | Lit(a)        -> begin match a with
                         | StringLit(x,typ) -> sprintf "\"%s\"" x
                         | IntLit(x,typ)    -> sprintf "%d" x
@@ -168,8 +178,8 @@ and exp_to_str exp = match exp with
                         | True             -> "true"
                         | False            -> "false"
                         end
-    | Fun(a,b,c)    -> sprintf "%s.%s(%s)" a b (args_to_str c)
-    | Input         -> "input"
+    | Fun(a,b,c,_)    -> sprintf "%s.%s(%s)" (lval_to_str a) b (args_to_str c)
+    | Input         -> "input()"
     
 
 
