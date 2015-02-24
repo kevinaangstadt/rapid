@@ -19,9 +19,9 @@ macro test2 () {
         report;
 }
 
-network (list nodes, int d) {
-    test('d');
-    //hamming_distance("hello", 3);
+network (String nodes[], int d) {
+    //test('d');
+    hamming_distance("hello", 3);
     //hamming_distance("jello", 3);
 
 }

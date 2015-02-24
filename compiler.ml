@@ -35,39 +35,12 @@ let if_seed = new_seed ()
 let c_seed = new_seed ()
 let while_seed = new_seed ()
 
-let get_exp_type exp =
-    match exp with
-    | EQ(_,_,Some t)
-    | NEQ(_,_,Some t)
-    | LEQ(_,_,Some t)
-    | GEQ(_,_,Some t)
-    | LT(_,_,Some t)
-    | GT(_,_,Some t)
-    | Not(_,Some t)
-    | And(_,_,Some t)
-    | Or(_,_,Some t)
-    | Plus(_,_,Some t)
-    | Minus(_,_,Some t)
-    | Times(_,_,Some t)
-    | Mod(_,_,Some t)
-    | Fun(_,_,_,Some t)
-    | Lval(_,Some t) -> t
-    | Negative(_) -> Int
-    | Lit(l) ->
-        begin match l with
-        | StringLit(_,t)
-        | IntLit(_,t)
-        | CharLit(_,t)-> t
-        | True | False -> Boolean
-        end
-    | Input -> Automata
-
 
 let evaluate_report last=
     Automata.set_report net last true
 
 let is_counter exp =
-    (get_exp_type exp) = Counter
+    exp.expr_type = Counter
             
 (*let is_counter_expression exp =
     match exp with
@@ -265,18 +238,20 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
-    match get_exp_type exp with
+    match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
         | Automata -> AutomataExp(evaluate_expression_aut exp s prefix seed)
         | Int -> IntExp(evaluate_int_expression exp)
+        | Char -> CharExp(evaluate_char_expression exp)
+        | String -> StringExp(evaluate_string_expression exp)
 and evaluate_expression_aut (exp : expression) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
     let get_value v =
         begin
-        match v with
+        match v.exp with
             | Lit(CharLit(a,_)) -> a
-            | Lval((n,o),_) ->
+            | Lval((n,o)) ->
                 let (Variable(name,typ,Some v)) = Hashtbl.find symbol_table n in
                 match o with
                 | NoOffset ->
@@ -284,8 +259,8 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     | CharValue(s) -> s
                     end
         end in
-    match exp with
-        | EQ(a,b,_) -> begin
+    match exp.exp with
+        | EQ(a,b) -> begin
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
                     | None -> [new_element]
@@ -293,15 +268,15 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                         let cons = List.map (fun a -> (a,None)) x in
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
-            if a = Input then
+            if a.exp = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),Automata.NotStart,false,[],false) in
                 helper new_element
-            else if b = Input then
+            else if b.exp = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
-        | NEQ(a,b,_) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
+        | NEQ(a,b) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
             let helper (Automata.STE(id,set,strt,latch,connect,report) as new_element) = begin
                 match s with
                     | None -> [new_element]
@@ -309,10 +284,10 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                         let cons = List.map (fun a -> (a,None)) x in
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
-            if a = Input then
+            if a.exp = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value b)),Automata.NotStart,false,[],false) in
                 helper new_element
-            else if b = Input then
+            else if b.exp = Input then
                 let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value a)),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
@@ -320,7 +295,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
         (*| LEQ(a,b)
         | LT(a,b)
         | GT(a,b)*)
-        | Not(a,_) -> (* TODO This is a copied and modified from the if-statement.  Need to combine/consolidate *)
+        | Not(a) -> (* TODO This is a copied and modified from the if-statement.  Need to combine/consolidate *)
             begin
             let temp_net = Automata.create "tmp" "" in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
@@ -381,7 +356,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
             ) [] if_exp
             end
         (*| Negative(a)*)
-        | And(a,b,_) ->
+        | And(a,b) ->
             let rec add_to_last (Automata.STE(id,set,strt,latch,connect,report) as start) x =
                 match connect with
                 | hd :: tl -> Automata.STE(id,set,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
@@ -396,24 +371,24 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                 | None -> a_eval
                 | Some x -> List.map (fun a -> add_to_last a x) a_eval
             end
-        | Or(a,b,_) ->
+        | Or(a,b) ->
             (*TODO Do we do this here, or at a later optimization stage?*)
             let rec build_charset c =
-                match c with
-                    | EQ(a,b,_)
-                    | NEQ(a,b,_) ->
-                        if a = Input then Char.escaped (get_value b)
-                        else if b = Input then Char.escaped (get_value a)
+                match c.exp with
+                    | EQ(a,b)
+                    | NEQ(a,b) ->
+                        if a.exp = Input then Char.escaped (get_value b)
+                        else if b.exp = Input then Char.escaped (get_value a)
                         else raise (Syntax_error "Input is messed up")
-                    | Or(a,b,_) -> (build_charset a) ^ (build_charset b)
+                    | Or(a,b) -> (build_charset a) ^ (build_charset b)
                     | _ -> ""
                 in
             let rec can_condense c =
-                match c with
-                    | EQ(_,_,_)
-                    | NEQ(_,_,_) -> true
-                    | Or(a,b,_) -> (can_condense a) && (can_condense b)
-                    | And(_,_,_) -> false
+                match c.exp with
+                    | EQ(_,_)
+                    | NEQ(_,_) -> true
+                    | Or(a,b) -> (can_condense a) && (can_condense b)
+                    | And(_,_) -> false
                 in
             if can_condense a then
                 if can_condense b then
@@ -438,7 +413,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     let a_eval = evaluate_expression_aut a s prefix seed in
                     let b_eval = evaluate_expression_aut b s prefix seed in
                     a_eval @ b_eval
-        | Fun((a,_),b,c,_) ->
+        | Fun((a,_),b,c) ->
             begin match b with
                 | "count" ->
                     begin
@@ -479,8 +454,8 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
 and evaluate_counter_expression (exp : expression) =
     let get_counter v =
         begin
-        match v with
-            | Lval((a,_),_) ->
+        match v.exp with
+            | Lval((a,_)) ->
                 let id = Hashtbl.find counter_rename a in
                 let (Variable(name,typ, Some (AutomataElement(e)))) = Hashtbl.find symbol_table id in
                     Automata.get_id e
@@ -504,55 +479,55 @@ and evaluate_counter_expression (exp : expression) =
                     create (i - 1) (Some ctr)
             end in
         let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t" c a) (range low high) in
-        let (tb,fb) = match exp with
-            | EQ(_,_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
-            | GT(_,_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
-            | GEQ(_,_,_) -> ( state_list num (num + 2) , state_list 0 num )
-            | LEQ(_,_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
-            | LT(_,_,_) ->( state_list 0 num , state_list num (num + 2) ) in
+        let (tb,fb) = match exp.exp with
+            | EQ(_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
+            | GT(_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
+            | GEQ(_,_) -> ( state_list num (num + 2) , state_list 0 num )
+            | LEQ(_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
+            | LT(_,_) ->( state_list 0 num , state_list num (num + 2) ) in
         
         (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1))
         end in
     (*if counter is not listed first, flip it!*)
-    match exp with
-        | EQ(a,b,t) -> if is_counter b then evaluate_counter_expression (EQ(b,a,t))
+    match exp.exp with
+        | EQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = EQ(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GT(a,b,t) -> if is_counter b then evaluate_counter_expression (LEQ(b,a,t))
+        | GT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LEQ(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GEQ(a,b,t) -> if is_counter b then evaluate_counter_expression (LT(b,a,t))
+        | GEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LT(b,a); })
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LEQ(a,b,t) -> if is_counter b then evaluate_counter_expression (GT(b,a,t))
+        | LEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GT(b,a); })
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LT(a,b,t) -> if is_counter b then evaluate_counter_expression (GEQ(b,a,t))
+        | LT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GEQ(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
 
 and evaluate_boolean_expression exp =
-    match exp with
-        | EQ(a,b,_) ->
-            begin match get_exp_type a with
+    match exp.exp with
+        | EQ(a,b) ->
+            begin match a.expr_type with
                 | Boolean -> (evaluate_boolean_expression a) = (evaluate_boolean_expression b)
                 | Int -> (evaluate_int_expression a) = (evaluate_int_expression b)
                 | Char -> (evaluate_char_expression a) = (evaluate_char_expression b)
             end
-        | NEQ(a,b,_) ->
-            begin match get_exp_type a with
+        | NEQ(a,b) ->
+            begin match a.expr_type with
                 | Boolean -> (evaluate_boolean_expression a) <> (evaluate_boolean_expression b)
                 | Int -> (evaluate_int_expression a) <> (evaluate_int_expression b)
                 | Char -> (evaluate_char_expression a) <> (evaluate_char_expression b)
             end
-        | LEQ(a,b,_) -> (evaluate_int_expression a) <= (evaluate_int_expression b)
-        | GEQ(a,b,_) -> (evaluate_int_expression a) >= (evaluate_int_expression b)
-        | LT(a,b,_) -> (evaluate_int_expression a) < (evaluate_int_expression b)
-        | GT(a,b,_) -> (evaluate_int_expression a) > (evaluate_int_expression b)
-        | Not(a,_) -> not (evaluate_boolean_expression a)
-        | And(a,b,_) -> (evaluate_boolean_expression a) && (evaluate_boolean_expression b)
-        | Or(a,b,_) -> (evaluate_boolean_expression a) || (evaluate_boolean_expression b)
-        | Lval((a,o),_) ->
+        | LEQ(a,b) -> (evaluate_int_expression a) <= (evaluate_int_expression b)
+        | GEQ(a,b) -> (evaluate_int_expression a) >= (evaluate_int_expression b)
+        | LT(a,b) -> (evaluate_int_expression a) < (evaluate_int_expression b)
+        | GT(a,b) -> (evaluate_int_expression a) > (evaluate_int_expression b)
+        | Not(a) -> not (evaluate_boolean_expression a)
+        | And(a,b) -> (evaluate_boolean_expression a) && (evaluate_boolean_expression b)
+        | Or(a,b) -> (evaluate_boolean_expression a) || (evaluate_boolean_expression b)
+        | Lval((a,o)) ->
             let Variable(n,t,(Some (BooleanValue(b)))) = symbol_variable_lookup a in
                 b
         | Lit(a) -> begin match a with
@@ -561,26 +536,35 @@ and evaluate_boolean_expression exp =
                     end
 
 and evaluate_int_expression exp =
-    match exp with
+    match exp.exp with
         | Negative(a) -> - (evaluate_int_expression a)
-        | Lval((a,o),_) ->
+        | Lval((a,o)) ->
             let Variable(n,t,(Some (IntValue(i)))) = symbol_variable_lookup a in
                 i
         | Lit(a) -> begin match a with
                       | IntLit(x,_) -> x
                     end
-        | Fun((a,o),b,c,_) ->
+        | Fun((a,o),b,c) ->
             let (Variable(n,t,(Some (StringValue(v))))) = symbol_variable_lookup a in
                 begin match b with
                     | "length" -> String.length v
                 end
 and evaluate_char_expression exp =
-    match exp with
-        | Lval((a,o),_) ->
+    match exp.exp with
+        | Lval((a,o)) ->
             let Variable(n,t,(Some (CharValue(c)))) = symbol_variable_lookup a in
                 c
         | Lit(a) -> begin match a with
                       | CharLit(x,_) -> x
+                    end
+
+and evaluate_string_expression exp =
+    match exp.exp with
+        | Lval((a,o)) ->
+            let Variable(n,t,(Some (StringValue(s)))) = symbol_variable_lookup a in
+                s
+        | Lit(a) -> begin match a with
+                      | StringLit(x,_) -> x
                     end
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
@@ -589,8 +573,8 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         let value =
             begin
             (*TODO allow for offsets*)
-            match arg with
-                | Lval((s,o2),_) ->
+            match arg.exp with
+                | Lval((s,o2)) ->
                     let variable = Hashtbl.find symbol_table s in
                     begin
                     match variable with

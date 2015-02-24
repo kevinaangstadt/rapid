@@ -105,6 +105,7 @@ type exp_return =
     | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string)
     | BooleanExp of bool
     | IntExp of int
+    | CharExp of char
     | StringExp of string
 type symbol = (string, container) Hashtbl.t
 
@@ -124,6 +125,9 @@ and typ_to_str t = match t with
     | Int ->    "int"
     | Char ->   "char"
     | Counter ->"Counter"
+    | Boolean ->"bool"
+    | NoType -> "ERROR!"
+    | Automata->"Automata(internal)"
     | Array(t)->typ_to_str t
 
 and init_to_str i = match i with

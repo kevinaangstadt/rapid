@@ -135,8 +135,17 @@ let check (Program(macros,network) as p) : program =
                     | Int -> Int
                 in exp.expr_type <- typ ; at
                 end
-            | Lval(var) -> check_lval var gamma
-            | Lit(a) -> gamma
+            | Lval(var) ->
+                let gamma_prime = check_lval var gamma in
+                exp.expr_type <- get_lval_type var gamma_prime ;
+                gamma_prime
+            | Lit(a) ->
+                let typ = match a with
+                    | StringLit(_,t)
+                    | IntLit(_,t)
+                    | CharLit(_,t) -> t
+                    | True | False -> Boolean
+                in exp.expr_type <- typ ; gamma
             (* TODO handle checking arguments at some point *)
             | Fun(a,b,c) ->
                 let gamma_prime = check_lval a gamma in

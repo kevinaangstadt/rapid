@@ -218,7 +218,6 @@ while_statement:
 
 expression_statement:
       expression TSEMICOLON { ExpStmt(Some $1) }
-    | TSEMICOLON { ExpStmt(None) }
 ;
 
 expression:
@@ -262,18 +261,21 @@ multiplication:
     | multiplication TMOD negation  { make_exp (Mod($1,$3)) ($1.loc) }
 
 negation:
-    | TNOT operand                  { make_exp (Not($2)) ($1.loc) }
-    | TMINUS operand %prec UMINUS   { make_exp (Negative($2)) ($1.loc) }
+    | TNOT operand                  { make_exp (Not($2)) ($1) }
+    | TMINUS operand %prec UMINUS   { make_exp (Negative($2)) ($1) }
     | operand                       { $1 }
 ;
 
 operand:
-      literal { make_exp (Lit($1)) ($1.loc) }
+      literal {
+        let lit,loc = $1 in
+            make_exp (Lit(lit)) (loc)
+    }
     | TINPUT TLPAREN TRPAREN { make_exp (Input) ($1) }
     /* TODO make this actually for lvals */
     | IDENT {  
         let name,loc = $1 in
-            make_exp (Lval((name,NoOffset)) loc
+            make_exp (Lval((name,NoOffset))) loc
         }
     | IDENT TDOT IDENT TLPAREN args TRPAREN {
         let name,loc1 = $1 in
@@ -286,16 +288,16 @@ operand:
 literal:
       INT {
         let value,loc = $1 in
-            IntLit(value,Int)
+            IntLit(value,Int),loc
     }
     | STRINGLIT {
         let value,loc = $1 in
-            StringLit(value,String)
+            StringLit(value,String),loc
     }
     | CHARLIT {
         let value,loc = $1 in
-            CharLit(value,Char)
+            CharLit(value,Char),loc
     }
-    | TRUE { True }
-    | FALSE { False }
+    | TRUE { True,$1 }
+    | FALSE { False,$1 }
 ;
