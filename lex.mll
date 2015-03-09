@@ -60,6 +60,8 @@ rule initial = parse
     | "while"   { TWHILE(where lexbuf) }
     | "if"      { TIF(where lexbuf) }
     | "else"    { TELSE(where lexbuf) }
+    | "either"  { TEITHER(where lexbuf) }
+    | "orelse"  { TORELSE(where lexbuf) }
     
     | ("0x")?['0'-'9']+ {
         let str = Lexing.lexeme lexbuf in

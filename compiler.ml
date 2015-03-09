@@ -7,11 +7,6 @@ open Language (* Contains all the types for the AP language *)
 open Id (*For counting on IDs*)
 open Util
 
-let explode s =
-    let rec exp i l =
-        if i < 0 then l else exp (i - 1) (s.[i] :: l) in
-    exp (String.length s - 1) []
-
 
 let symbol_table : symbol = Hashtbl.create 255
 
@@ -172,6 +167,13 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             | BooleanExp(b) ->
                 if b then evaluate_statement then_clause last
                 else evaluate_statement else_clause last
+            end
+        | Either(statement_blocks) ->
+            begin
+            List.fold_left( fun complete stmt ->
+                let terminals = evaluate_statement stmt last in
+                complete @ terminals
+            ) [] statement_blocks
             end
         | ForEach((Param((name,o),t)),source,f) ->
             begin

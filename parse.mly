@@ -60,6 +60,8 @@
 %token	<Util.loc>        TWHILE
 %token	<Util.loc>        TIF
 %token	<Util.loc>        TELSE
+%token  <Util.loc>        TEITHER
+%token  <Util.loc>        TORELSE
 
 %token	EOF
 
@@ -151,6 +153,7 @@ opt_semi_list:
 
 statement:
       if_statement { $1 }
+    | either_statement { Either($1) }
     | foreach_statement { $1 }
     | while_statement { $1 }
     | block { $1 }
@@ -203,6 +206,13 @@ typ:
     | TCHAR { Char }
     | TCOUNTER { Counter }
 ;
+
+either_statement:
+    | TEITHER statement orelse_list { $2 :: $3 }
+
+orelse_list:
+    | /* empty */ { [] }
+    | TORELSE statement orelse_list { $2 :: $3 }
 
 if_statement:
       TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }

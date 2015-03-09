@@ -204,6 +204,12 @@ let check (Program(macros,network) as p) : program =
                     | If(_,_,s2) -> check_statement s2 s1_t 
                     | _ -> s1_t
                 end
+            | Either(stmts) ->
+                List.iter(fun block ->
+                    match block with
+                     | Block(_) -> check_statement block gamma ; ()
+                     | _ -> raise (Syntax_error "An either or orelse token must be followed by a block")
+                ) stmts ; gamma
             | ForEach((Param((l,o),t) as p),e,s) ->
                 begin
                 match o with

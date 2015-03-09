@@ -7,7 +7,7 @@ OCAMLOPT  = ocamlopt
 OCAMLYACC = ocamlyacc
 OCAMLLEX  = ocamllex
 
-all: language
+all: language simulator
 
 LANG_OBJS = \
 	util.cmx \
@@ -17,8 +17,7 @@ LANG_OBJS = \
 	id.cmx \
 	compiler.cmx \
 	parse.cmx \
-	lex.cmx \
-	main.cmx
+	lex.cmx
 
 clean: 
 	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe
@@ -35,8 +34,11 @@ clean:
 %.ml: %.mll
 	$(OCAMLLEX) $<
 	
-language: $(LANG_OBJS)
-	$(OCAMLOPT) -o language str.cmxa $(LANG_OBJS)
+language: $(LANG_OBJS) main.cmx
+	$(OCAMLOPT) -o language str.cmxa $(LANG_OBJS) main.cmx
+	
+simulator: $(LANG_OBJS) simulate.cmx
+	$(OCAMLOPT) -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
 
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

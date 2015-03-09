@@ -73,8 +73,6 @@ type param = Param of lval * typ
     
 type parameters = Parameters of param list
 
-type scope = MacroScope | NetworkScope
-
 type initialize =
     | PrimitiveInit of  expression
     | ArrayInit of initialize list
@@ -83,6 +81,7 @@ type statement =
     | Report
     | Block of statement list 
     | If of expression * statement * statement
+    | Either of statement list
     | ForEach of param * expression * statement
     | While of expression * statement
     | VarDec of (lval * typ * initialize option) list

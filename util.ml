@@ -12,3 +12,8 @@ let where lexbuf : loc =
     let line = curr.Lexing.pos_lnum in
     let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
         (line,cnum)
+        
+let explode s =
+    let rec exp i l =
+        if i < 0 then l else exp (i - 1) (s.[i] :: l) in
+    exp (String.length s - 1) []
