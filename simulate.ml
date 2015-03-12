@@ -13,7 +13,7 @@ type state = {
     report : (int,int) Hashtbl.t ;
 }
 
-
+let jobs = Queue.create ()
 
 (* Cloning does a "deep" copy of memory and input (not entirely preceise)
  * and a shallow copy of the reports, since these are cumulative
@@ -40,6 +40,11 @@ let consume sigma : value * state =
         input = tail ;
         index = sigma.index + 1 ;
     } in
+        begin try
+            let head = List.hd tail in
+            if head = '@' then Queue.add (List.tl tail,sigma_prime.index) jobs
+        with Failure _-> ()
+        end ;
         value,sigma_prime
         
 let print_reports sigma =
@@ -118,37 +123,13 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | GT(a,b) ->
             let value_a,sigma_prime = evaluate_expression a sigma in
             let value_b,sigma_prime_prime = evaluate_expression b sigma_prime in
-                let value = match value_a,value_b with
-                    | IntValue(a),IntValue(b) ->
-                        begin
-                        match exp.exp with
-                            | EQ(_,_) -> a = b
-                            | NEQ(_,_) -> a <> b
-                            | LEQ(_,_) -> a <= b
-                            | GEQ(_,_) -> a >= b
-                            | LT(_,_) -> a < b
-                            | GT(_,_) -> a > b
-                        end
-                    | CharValue(a),CharValue(b) ->
-                        begin
-                        match exp.exp with
-                            | EQ(_,_) -> a = b
-                            | NEQ(_,_) -> a <> b
-                            | LEQ(_,_) -> a <= b
-                            | GEQ(_,_) -> a >= b
-                            | LT(_,_) -> a < b
-                            | GT(_,_) -> a > b
-                        end
-                    | BooleanValue(a),BooleanValue(b) ->
-                        begin
-                        match exp.exp with
-                            | EQ(_,_) -> a = b
-                            | NEQ(_,_) -> a <> b
-                            | LEQ(_,_) -> a <= b
-                            | GEQ(_,_) -> a >= b
-                            | LT(_,_) -> a < b
-                            | GT(_,_) -> a > b
-                        end
+                let value = match exp.exp with
+                    | EQ(_,_) -> value_a = value_b
+                    | NEQ(_,_) -> value_a <> value_b
+                    | LEQ(_,_) -> value_a <= value_b
+                    | GEQ(_,_) -> value_a >= value_b
+                    | LT(_,_) -> value_a < value_b
+                    | GT(_,_) -> value_a > value_b
                 in
                     BooleanValue(value),sigma_prime_prime
         | Not(a) ->
@@ -238,17 +219,26 @@ and evaluate_macro ((Macro(name,Parameters(params),stmt)) : macro) (args:express
     sigma_prime
     end
     
-let simulate (Program(macros,(Network(params,(Block(b)))))) sigma =
-    begin
-    try
-    (* Add the macros to the symbol table*)
-    List.iter (fun ((Macro(name,params,stmts)) as m) ->
-                    Hashtbl.add sigma.memory name (MacroContainer(m))) macros
-    ;
+and evaluate_network (Network(params,(Block(b)))) sigma =
     List.iter (fun s ->
         let start_sigma = clone_state sigma in
         (evaluate_statement s start_sigma) ; ()
     ) b
+    
+let simulate (Program(macros,net)) sigma =
+    begin
+    try
+    (* Add the macros to the state*)
+    List.iter (fun ((Macro(name,params,stmts)) as m) ->
+                    Hashtbl.add sigma.memory name (MacroContainer(m))) macros
+    ;
+    let _ = consume sigma in
+    Printf.printf "size:%d\n" (Queue.length jobs) ;
+    while not (Queue.is_empty jobs) do
+        let job_input,i = Queue.take jobs in
+        evaluate_network net {sigma with input = job_input; index = i }
+    done
+    
     ;
     print_reports sigma
     with Failure _ -> print_reports sigma
@@ -274,11 +264,12 @@ let read_input (name : string) =
         try
             let c = input_char channel in
             build_list (c::l) channel
-        with End_of_file -> l
+        with End_of_file ->  l 
         in
     try
         let channel = open_in name in
-        List.rev (build_list [] channel)
+        (*Cheat to get the queue working nicely*)
+        '@' :: List.rev (build_list [] channel)
     with Sys_error _ -> begin
         Printf.printf "Failed to open %s\n" name ; exit (-1)
         end ;;
@@ -304,7 +295,7 @@ let argspec = Arg.align argspec in
         let program_input = read_input !input in
         let sigma = {
             input = program_input ;
-            index = 1;
+            index = 0;
             memory = Hashtbl.create 255 ;
             report = Hashtbl.create (String.length !input)
         } in

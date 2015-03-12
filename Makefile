@@ -20,7 +20,7 @@ LANG_OBJS = \
 	lex.cmx
 
 clean: 
-	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe rapidsim rapidsim.exe
 
 %.cmi: %.mli
 	$(OCAMLOPT) -c $<
