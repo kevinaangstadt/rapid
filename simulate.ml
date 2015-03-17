@@ -6,6 +6,15 @@
 open Util
 open Language
 
+(*Helper function if needed for debugging*)
+let val_to_string value =
+    match value with
+        | StringValue(s) -> s
+        | IntValue(i) -> Printf.sprintf "%d" i
+        | CharValue(c) -> Printf.sprintf "%c" c
+        | BooleanValue(b) -> Printf.sprintf "%b" b
+        | AutomataElement(_) -> "Automata"
+
 type state = {
     input : char list ;
     index : int ;
@@ -13,7 +22,12 @@ type state = {
     report : (int,int) Hashtbl.t ;
 }
 
-let jobs = Queue.create ()
+let original_sigma = ref {
+    input = [] ;
+    index = 0;
+    memory = Hashtbl.create 0 ;
+    report = Hashtbl.create 0 ;
+}
 
 (* Cloning does a "deep" copy of memory and input (not entirely preceise)
  * and a shallow copy of the reports, since these are cumulative
@@ -24,6 +38,30 @@ let clone_state sigma = {
     memory = Hashtbl.copy sigma.memory ;
     report = sigma.report
 }
+
+(*Let's set up the job queue and related functions*)
+type job_location =
+    | EvaluationDone
+    | Converge
+    | EvaluatingStatement of statement
+    | EvaluatingNetwork
+    | RemoveVariables of string list
+    
+let jobs = Queue.create ()
+let job_history : (int,job_location) Hashtbl.t = Hashtbl.create 1000
+
+let in_queue idx stmt =
+    begin try
+    let statements_seen = Hashtbl.find_all job_history idx in
+        List.mem stmt statements_seen
+    with Not_found -> false
+    end
+
+let add_job (next : job_location list) (sigma : state) =
+    (*TODO Still need to figure out the best way to filter job queue*)
+    match next with
+        | [] -> Queue.add (EvaluationDone,[],sigma) jobs
+        | hd :: tl -> Hashtbl.add job_history sigma.index hd ; Queue.add (hd,tl,sigma) jobs
 
 let report sigma =
     let idx = sigma.index - 1 in
@@ -42,7 +80,10 @@ let consume sigma : value * state =
     } in
         begin try
             let head = List.hd tail in
-            if head = '@' then Queue.add (List.tl tail,sigma_prime.index) jobs
+            if head = '@' && not (in_queue (sigma.index + 1) EvaluatingNetwork) then
+                begin
+                add_job [EvaluatingNetwork] {!original_sigma with input = List.tl tail; index = sigma_prime.index + 1}
+                end
         with Failure _-> ()
         end ;
         value,sigma_prime
@@ -50,38 +91,46 @@ let consume sigma : value * state =
 let print_reports sigma =
     Hashtbl.iter (fun k v -> Printf.printf "%d -> %d\n" k v) sigma.report
 
-let rec evaluate_statement (stmt :statement) (sigma : state) : state =
+let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
     match stmt with
-        | Report -> report sigma ; sigma
+        | Report -> report sigma ; add_job next sigma
         | Block(b) ->
-            List.fold_left (fun sigma_prime s -> evaluate_statement s sigma_prime) sigma b
+            begin
+            match b with
+                | [] -> add_job next sigma
+                | hd::tl -> add_job (EvaluatingStatement(hd)::EvaluatingStatement(Block(tl))::next) sigma
+            end
         | If(exp,then_clause,else_clause) ->
             let (BooleanValue(value)),sigma_prime = evaluate_expression exp sigma in
-                if value then evaluate_statement then_clause sigma_prime
-                else evaluate_statement else_clause sigma_prime
+                if value then
+                    add_job (EvaluatingStatement(then_clause)::next) sigma_prime
+                else add_job (EvaluatingStatement(else_clause)::next) sigma_prime
         | While(exp,body) ->
             let (BooleanValue(value)),sigma_prime = evaluate_expression exp sigma in
-                if value then evaluate_statement (Block([body;stmt])) sigma_prime
-                else sigma_prime
-        (*| Either(statement_blocks) ->*)
+                if value then
+                    add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::next) sigma_prime
+                else add_job next sigma_prime
+        | Either(statement_blocks) ->
+            List.iter (fun stmt ->
+                let sigma_prime = clone_state sigma in
+                    add_job (EvaluatingStatement(stmt)::Converge::next) sigma_prime
+            ) statement_blocks
         | ForEach((Param((name,o),t)),source,f) ->
             let value,sigma_prime = evaluate_expression source sigma in
                 begin
                 match value with
                 | StringValue(s) ->
                     let char_list = explode s in
-                        List.fold_left (fun sigma_prime c ->
+                    let new_stmts = RemoveVariables([name]) :: List.fold_left (fun last c ->
                             (* add binding *)
-                            let c = CharValue(c) in
-                            Hashtbl.add sigma.memory name (Variable(name,Char,Some c)) ;
-                            let sigma_prime_prime = evaluate_statement f sigma_prime in
-                            (* remove binding *)
-                            Hashtbl.remove sigma.memory name ; sigma_prime_prime
-                        ) sigma_prime char_list
+                            let new_assign = (Assign((name,NoOffset),{source with exp = Lit(CharLit(c,Char))})) in
+                                EvaluatingStatement(f)::EvaluatingStatement(new_assign)::last
+                        ) [EvaluatingStatement(VarDec([(name,o),t,None]))] char_list in
+                        add_job ((List.rev new_stmts) @ next) sigma
                 (*TODO Add Array iteration here*)
                 end
         | VarDec(var) ->
-            List.fold_left (fun sigma_prime ((s,o),t,init) ->
+            let sigma_prime = List.fold_left (fun sigma_prime ((s,o),t,init) ->
                 let value,sigma_prime_prime = match t with
                     | Counter -> Some(IntValue(0)), sigma_prime
                     | _ ->
@@ -94,24 +143,36 @@ let rec evaluate_statement (stmt :statement) (sigma : state) : state =
                 in
                     Hashtbl.add sigma_prime_prime.memory s (Variable(s,t,value)) ;
                     sigma_prime_prime
-            ) sigma var
-        | MacroCall(a,Arguments(b)) ->
-            let (MacroContainer(m)) = Hashtbl.find sigma.memory a in
-                evaluate_macro m b sigma
+            ) sigma var in
+                add_job next sigma_prime
+                
+        | MacroCall(a,Arguments(args)) ->
+            let names = ref [] in
+            let (MacroContainer((Macro(name,Parameters(params),stmt)))) = Hashtbl.find sigma.memory a in
+            (*evaluate and assign variables*)
+            let sigma_prime = List.fold_left2 (fun sigma_prime (Param((p,o),t)) arg ->
+                let value,sigma_prime_prime = evaluate_expression arg sigma_prime in
+                    names := p :: !names ;
+                    Hashtbl.add sigma_prime_prime.memory p (Variable(p,t,Some value)) ;
+                    sigma_prime_prime
+            ) sigma params args in
+            
+                add_job (EvaluatingStatement(stmt) :: RemoveVariables(!names) :: next) sigma_prime
+
         | ExpStmt(exp) ->
             begin
             match exp with
-                | None -> sigma
+                | None -> add_job next sigma
                 | Some exp ->
                     let value,sigma_prime = evaluate_expression exp sigma in
-                        sigma_prime
+                        add_job next sigma_prime
             end
         | Assign((name,o),exp) ->
             let value,sigma_prime = evaluate_expression exp sigma in
                 (*TODO Arrays!*)
                 let (Variable(s,t,_)) = Hashtbl.find sigma_prime.memory name in
                 Hashtbl.replace sigma_prime.memory name (Variable(s,t,(Some value))) ;
-                sigma_prime
+                add_job next sigma_prime
 
 and evaluate_expression (exp : expression) (sigma : state) : value * state =
     match exp.exp with
@@ -187,7 +248,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     value,sigma
         | Input -> consume sigma
     
-and evaluate_macro ((Macro(name,Parameters(params),stmt)) : macro) (args:expression list) (sigma : state) : state =
+(*and evaluate_macro ((Macro(name,Parameters(params),stmt)) : macro) (args:expression list) (sigma : state) : state =
     (* add bindings for arguments to state *)
     List.iter2 (fun (Param((p,o),t)) arg ->
         let value =
@@ -217,36 +278,55 @@ and evaluate_macro ((Macro(name,Parameters(params),stmt)) : macro) (args:express
     (* remove those bindings again *)
     List.iter(fun (Param((p,o),t)) -> Hashtbl.remove sigma_prime.memory p) params ;
     sigma_prime
-    end
+    end*)
     
-and evaluate_network (Network(params,(Block(b)))) sigma =
+and evaluate_network (Network(params,(Block(b)))) sigma next =
     List.iter (fun s ->
         let start_sigma = clone_state sigma in
-        (evaluate_statement s start_sigma) ; ()
+        add_job (EvaluatingStatement(s) :: next) start_sigma
     ) b
     
-let simulate (Program(macros,net)) sigma =
+let simulate (Program(macros,net)) =
     begin
     try
     (* Add the macros to the state*)
     List.iter (fun ((Macro(name,params,stmts)) as m) ->
-                    Hashtbl.add sigma.memory name (MacroContainer(m))) macros
+                    Hashtbl.add !original_sigma.memory name (MacroContainer(m))) macros
     ;
-    let _ = consume sigma in
-    Printf.printf "size:%d\n" (Queue.length jobs) ;
+    let _ = consume !original_sigma in
+    
     while not (Queue.is_empty jobs) do
-        let job_input,i = Queue.take jobs in
-        evaluate_network net {sigma with input = job_input; index = i }
+        (*Printf.printf "size:%d\n" (Queue.length jobs) ;*)
+        let where,next,sigma = Queue.take jobs in
+        match where with
+            | EvaluationDone -> ()
+            | EvaluatingStatement(s) -> evaluate_statement s sigma next
+            | EvaluatingNetwork -> evaluate_network net sigma next
+            | RemoveVariables(l) ->
+                begin
+                List.iter (fun s -> Hashtbl.remove sigma.memory s) l ;
+                add_job next sigma
+                end
+            | Converge ->
+                begin
+                match next with
+                    | [] -> ()
+                    | hd :: tl -> 
+                        if not (in_queue sigma.index (List.hd next)) then
+                            add_job next sigma
+                        else
+                            ()
+                end
     done
     
     ;
-    print_reports sigma
-    with Failure _ -> print_reports sigma
+    print_reports !original_sigma
+    with Failure _ -> print_reports !original_sigma
     end;;
 
-let process program sigma =
+let process program =
     let program_t = Tc.check program in
-        simulate program_t sigma
+        simulate program_t
         
 let read_program (name : string) =
     try
@@ -293,11 +373,10 @@ let argspec = Arg.align argspec in
     else
         let program = read_program !file in
         let program_input = read_input !input in
-        let sigma = {
+        original_sigma := {
             input = program_input ;
             index = 0;
             memory = Hashtbl.create 255 ;
             report = Hashtbl.create (String.length !input)
-        } in
-            process program sigma
+        }; process program
         
