@@ -3,11 +3,14 @@
 # University of Virginia
 # Department of Computer Science
 
-OCAMLOPT  = ocamlopt
+OCAMLOPT  = ocamloptp
 OCAMLYACC = ocamlyacc
 OCAMLLEX  = ocamllex
 
 all: language simulator
+
+test: simulator
+	cd test && ./test.sh && cd ..
 
 LANG_OBJS = \
 	util.cmx \
@@ -23,10 +26,10 @@ clean:
 	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe rapidsim rapidsim.exe
 
 %.cmi: %.mli
-	$(OCAMLOPT) -c $<
+	$(OCAMLOPT) -c -p $<
 
 %.cmx: %.ml 
-	$(OCAMLOPT) -c $<
+	$(OCAMLOPT) -c -p $<
 
 %.ml %.mli: %.mly
 	$(OCAMLYACC) $< 
@@ -38,7 +41,7 @@ language: $(LANG_OBJS) main.cmx
 	$(OCAMLOPT) -o language str.cmxa $(LANG_OBJS) main.cmx
 	
 simulator: $(LANG_OBJS) simulate.cmx
-	$(OCAMLOPT) -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
+	$(OCAMLOPT) -p -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
 
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

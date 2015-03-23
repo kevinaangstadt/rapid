@@ -1,0 +1,17 @@
+macro gappy() {
+    if('a' == input() ) {
+        either {
+            'a' == input();
+               
+        } orelse {
+            'a' == input() && '*' == input();
+                
+        }
+        if('b' == input() && 'c' == input())
+            report;
+    }
+}
+
+network () {
+    gappy();
+}

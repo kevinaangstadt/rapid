@@ -1,0 +1,14 @@
+macro frequent (String items) {
+    Counter c;
+    foreach(char i : items) {
+        while( input() != i );
+        c.count();
+    }
+    if( c >= items.length() )
+        report;
+    c.reset();
+}
+
+network () {
+    frequent("bricks");
+}
