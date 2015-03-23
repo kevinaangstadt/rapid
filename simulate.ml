@@ -80,7 +80,7 @@ let consume sigma : value * state =
     } in
         begin try
             let head = List.hd tail in
-            if head = '@' && not (in_queue (sigma.index + 1) EvaluatingNetwork) then
+            if head = '@' && not (in_queue (sigma_prime.index + 1) EvaluatingNetwork) then
                 begin
                 add_job [EvaluatingNetwork] {!original_sigma with input = List.tl tail; index = sigma_prime.index + 1}
                 end
@@ -333,7 +333,22 @@ let read_program (name : string) =
         let channel = open_in name in
         let lexbuf = Lexing.from_channel channel in
             flush stdout;
-            let return = Parse.program Lex.initial lexbuf in
+            let return =
+                try
+                Parse.program Lex.initial lexbuf
+                with exn ->
+                    begin
+                      let curr = lexbuf.Lexing.lex_curr_p in
+                      let line = curr.Lexing.pos_lnum in
+                      let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
+                      let tok = Lexing.lexeme lexbuf in
+                      Printf.printf "Parsing Error: \n";
+                      Printf.printf "line: %d\n" line ;
+                      Printf.printf "col: %d\n" cnum ;
+                      Printf.printf "tok: %s\n" tok;
+                      exit(-1)
+                    end
+            in
             close_in_noerr channel ; return
     with Sys_error _ -> begin
         Printf.printf "Failed to open %s\n" name ; exit (-1)
