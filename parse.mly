@@ -142,17 +142,18 @@ block:
 ;
 
 statement_list:
-      statement_list statement opt_semi_list { $1 @ [$2] }
-    | statement opt_semi_list { [$1] }
+      statement_list statement { $1 @ [$2] }
+    | statement { [$1] }
 ;
 
 opt_semi_list:
-    | /* nothing */ { () }
-    | TSEMICOLON opt_semi_list { () }
+    | /* nothing */ { [] }
+    | TSEMICOLON opt_semi_list { Block([]) :: $2 }
     ;
 
 statement:
-      if_statement { $1 }
+    | opt_semi_list { Block($1) }
+    | if_statement { $1 }
     | either_statement { Either($1) }
     | foreach_statement { $1 }
     | while_statement { $1 }
@@ -208,7 +209,7 @@ typ:
 ;
 
 either_statement:
-    | TEITHER statement orelse_list { $2 :: $3 }
+    | TEITHER block orelse_list { $2 :: $3 }
 
 orelse_list:
     | /* empty */ { [] }
