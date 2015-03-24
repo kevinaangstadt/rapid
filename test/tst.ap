@@ -1,4 +1,5 @@
-macro hamming_distance (String s, int d) {
+macro hamming_distance (String s, int temp) {
+    int d = temp + -1;
     Counter cnt;
     foreach (char c : s) {
         if(c != input())
@@ -14,53 +15,7 @@ macro test (char d) {
         report;
 }
 
-macro test2 () {
-    if('c' == input() && (('a' == input() || 'o' == input()) || ('o' == input() && 'a' == input() )) && 't' == input())
-        report;
-}
-
-macro test3 () {
-    if('h' == input() ) {
-        if('e' == input() ) {
-            if('l' == input()) {
-                if('l' == input()) {
-                    if('o' == input()) {
-                        report;
-                    } else {
-                        report ;
-                    }
-                } else {
-                    if('o' == input()) {
-                        report;
-                    } else {
-                        report;
-                    }
-                }
-            } else {
-                if('l' == input()) {
-                    if('o' == input()) {
-                        report;
-                    }
-                } 
-            } 
-        } else {
-            if('l' == input())
-                if('l' == input())
-                    if('o' == input())
-                        report;
-        }
-    } else {
-        if('e' == input())
-            if('l' == input())
-                if('l' == input())
-                    if('o' == input())
-                        report;
-    }
-}
-
 network (String nodes[], int d) {
-    //test('d');
-    hamming_distance("hello", 3);
-    hamming_distance("jello", 3);
-    //test3();
+    hamming_distance("hello", 4);
+    hamming_distance("jello", 4);
 }

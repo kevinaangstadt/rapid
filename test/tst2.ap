@@ -1,0 +1,8 @@
+macro test2 () {
+    if('c' == input() && (('a' == input() || 'o' == input()) || ('o' == input() && 'a' == input() )) && 't' == input())
+        report;
+}
+
+network () {
+    test2();
+}

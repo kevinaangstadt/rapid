@@ -1,8 +1,8 @@
 #!/bin/sh
 
-array=("tst" "string_kernels" "frequent")
+array=("tst" "tst2" "string_kernels" "frequent")
 for i in "${array[@]}"; do   # The quotes are necessary here
     echo "=========== $i ============="
-    ../rapidsim -input $i.txt $i.ap
+    ./rapidsim -input test/$i.txt test/$i.ap
     echo "============================"
 done

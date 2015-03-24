@@ -109,6 +109,18 @@ let check (Program(macros,network) as p) : program =
                 in
                     exp.expr_type <- typ ; bt
                 end
+            | Plus(a,b)
+            | Minus(a,b)
+            | Times(a,b)
+            | Mod(a,b) ->
+                let at = check_exp a gamma in
+                let bt = check_exp b at in
+                begin
+                let typ = match a.expr_type,b.expr_type with
+                    | Int,Int -> Int
+                in
+                    exp.expr_type <- typ ; bt
+                end
             | And(a,b)
             | Or(a,b) ->
                 let at = check_exp a gamma in

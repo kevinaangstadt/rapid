@@ -2,9 +2,16 @@
  * Kevin Angstadt
  * Language Simulator
  *)
+ 
+(*
+ * For printing memory:
+ * Hashtbl.iter (fun k v -> Printf.printf "%s -> %s\n" k ((fun v -> match v with Variable(_,_,Some v) -> (val_to_string v) | _ -> "") v)) sigma_prime.memory ;
+ *)
 
 open Util
 open Language
+
+exception Fail
 
 (*Helper function if needed for debugging*)
 let val_to_string value =
@@ -78,14 +85,14 @@ let consume sigma : value * state =
         input = tail ;
         index = sigma.index + 1 ;
     } in
-        begin try
+        (*begin try
             let head = List.hd tail in
             if head = '@' && not (in_queue (sigma_prime.index + 1) EvaluatingNetwork) then
                 begin
                 add_job [EvaluatingNetwork] {!original_sigma with input = List.tl tail; index = sigma_prime.index + 1}
                 end
         with Failure _-> ()
-        end ;
+        end ;*)
         value,sigma_prime
         
 let print_reports sigma =
@@ -156,7 +163,6 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                     Hashtbl.add sigma_prime_prime.memory p (Variable(p,t,Some value)) ;
                     sigma_prime_prime
             ) sigma params args in
-            
                 add_job (EvaluatingStatement(stmt) :: RemoveVariables(!names) :: next) sigma_prime
 
         | ExpStmt(exp) ->
@@ -165,7 +171,9 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                 | None -> add_job next sigma
                 | Some exp ->
                     let value,sigma_prime = evaluate_expression exp sigma in
-                        add_job next sigma_prime
+                        match value with
+                            | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
+                            | _ -> add_job next sigma_prime
             end
         | Assign((name,o),exp) ->
             let value,sigma_prime = evaluate_expression exp sigma in
@@ -191,6 +199,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     | GEQ(_,_) -> value_a >= value_b
                     | LT(_,_) -> value_a < value_b
                     | GT(_,_) -> value_a > value_b
+                    
                 in
                     BooleanValue(value),sigma_prime_prime
         | Not(a) ->
@@ -202,17 +211,31 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | And(a,b) ->
             (*TODO Make this actually fail early*)
             let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
-            let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
-                (BooleanValue(b1 && b2)),sigma_prime_prime
+                if a.expr_type = Automata && not b1 then raise Fail ;
+                let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
+                    (BooleanValue(b1 && b2)),sigma_prime_prime
         | Or(a,b) ->
             (*TODO make this actually work like or*)
+            Printf.printf "%s (%c) \n" (exp_to_str exp) (List.hd sigma.input);
             let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
             let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
+                Printf.printf "%s [%b %b %b]\n" (exp_to_str exp) b1 b2 (b1||b2);
                 (BooleanValue(b1 || b2)),sigma_prime_prime
-        (*| Plus(a,b)
+        | Plus(a,b)
         | Minus(a,b)
         | Times(a,b)
-        | Mod(a,b)*)
+        | Mod(a,b) ->
+            
+            let (IntValue(value_a)),sigma_prime = evaluate_expression a sigma in
+            let (IntValue(value_b)),sigma_prime_prime = evaluate_expression b sigma_prime in
+                let value = match exp.exp with
+                    | Plus(_,_) -> value_a + value_b
+                    | Minus(_,_) -> value_a - value_b
+                    | Times(_,_) -> value_a * value_b
+                    | Mod(_,_) -> value_a mod value_b
+                
+                in
+                    IntValue(value),sigma_prime_prime
         | Lval((name,o)) ->
             (*TODO ARRAYS!*)
             let (Variable(_,_,Some v)) = Hashtbl.find sigma.memory name in
@@ -293,11 +316,20 @@ let simulate (Program(macros,net)) =
     List.iter (fun ((Macro(name,params,stmts)) as m) ->
                     Hashtbl.add !original_sigma.memory name (MacroContainer(m))) macros
     ;
-    let _ = consume !original_sigma in
-    
+    List.iteri (fun i c ->
+        (*indexing starts at 1, not 0*)
+        let i = i + 1 in
+        if c = '@' then
+            add_job [EvaluatingNetwork]
+                { !original_sigma with
+                    index=i+1;
+                    input = sublist i !original_sigma.input
+                }
+        ) !original_sigma.input ;
     while not (Queue.is_empty jobs) do
         (*Printf.printf "size:%d\n" (Queue.length jobs) ;*)
         let where,next,sigma = Queue.take jobs in
+        try
         match where with
             | EvaluationDone -> ()
             | EvaluatingStatement(s) -> evaluate_statement s sigma next
@@ -311,12 +343,14 @@ let simulate (Program(macros,net)) =
                 begin
                 match next with
                     | [] -> ()
-                    | hd :: tl -> 
+                    | hd :: tl ->
+                        (* TODO Add an assertiomn here about state convergence and memory *)
                         if not (in_queue sigma.index (List.hd next)) then
                             add_job next sigma
                         else
                             ()
                 end
+        with Fail -> add_job [EvaluationDone] sigma
     done
     
     ;
@@ -364,7 +398,7 @@ let read_input (name : string) =
     try
         let channel = open_in name in
         (*Cheat to get the queue working nicely*)
-        '@' :: List.rev (build_list [] channel)
+        List.rev (build_list [] channel)
     with Sys_error _ -> begin
         Printf.printf "Failed to open %s\n" name ; exit (-1)
         end ;;
@@ -390,7 +424,7 @@ let argspec = Arg.align argspec in
         let program_input = read_input !input in
         original_sigma := {
             input = program_input ;
-            index = 0;
+            index = 1;
             memory = Hashtbl.create 255 ;
             report = Hashtbl.create (String.length !input)
         }; process program

@@ -1,10 +1,10 @@
 macro gappy() {
     if('a' == input() ) {
         either {
-            'a' == input();
+            '*' == input();
                
         } orelse {
-            'a' == input() && '*' == input();
+            '*' == input() && '*' == input();
                 
         }
         if('b' == input() && 'c' == input())

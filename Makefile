@@ -10,7 +10,7 @@ OCAMLLEX  = ocamllex
 all: language simulator
 
 test: simulator
-	cd test && ./test.sh && cd ..
+	test/test.sh ; ocamlprof simulate.ml > prof.ml
 
 LANG_OBJS = \
 	util.cmx \
@@ -23,7 +23,7 @@ LANG_OBJS = \
 	lex.cmx
 
 clean: 
-	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe rapidsim rapidsim.exe
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe rapidsim rapidsim.exe ocamlprof.dump prof.ml
 
 %.cmi: %.mli
 	$(OCAMLOPT) -c -p $<
