@@ -1,0 +1,19 @@
+/* Test 4 */
+
+macro test4() {
+    Counter cnt;
+    while('a' == input())
+        cnt.count();
+    if(cnt > 3) {
+        either {
+            'b' == input();
+        } orelse {
+            'b' == input() && 'c' == input();
+        }
+        report;
+    }
+}
+
+network () {
+    test4();
+}

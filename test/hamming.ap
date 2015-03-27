@@ -10,13 +10,13 @@ macro hamming_distance (String s, int d) {
 }
 
 network () {
-    hamming_distance("AGTC",2);
-    hamming_distance("GTCT",2);
+    hamming_distance("AGTC",(2 * 1));
+    hamming_distance("GTCT",(2 % 3));
     hamming_distance("TCTC",2);
     hamming_distance("CTCT",2);
     hamming_distance("TCTC",2);
     hamming_distance("CTCG",2);
-    /*hamming_distance("TCGA",2);
+    hamming_distance("TCGA",2);
     hamming_distance("CGAG",2);
     hamming_distance("TTAG",2);
     hamming_distance("TAGA",2);
@@ -29,7 +29,7 @@ network () {
     hamming_distance("GATC",2);
     hamming_distance("ATCA",2);
     hamming_distance("TCAG",2);
-    hamming_distance("CAGT",2);*/
+    hamming_distance("CAGT",2);
     hamming_distance("AGTT",2);
     hamming_distance("GTTC",2);
     hamming_distance("TTCA",2);

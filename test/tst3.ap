@@ -1,0 +1,15 @@
+/* Test 3 */
+macro test3(String s) {
+    Counter cnt;
+    foreach (char c : s) {
+        if(!(c == input() && c != input()))
+            cnt.count();
+    }
+    
+    if(cnt < (16-9))
+        report;
+}
+
+network () {
+    test3("abcdef");
+}

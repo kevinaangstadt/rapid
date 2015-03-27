@@ -1,0 +1,9 @@
+/* test 6 */
+macro test6() {
+    if(true)
+        report;
+}
+
+network() {
+    test6();
+}

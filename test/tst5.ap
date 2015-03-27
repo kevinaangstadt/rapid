@@ -1,0 +1,18 @@
+/* test 5 */
+macro m () {
+;
+}
+
+network () {
+    either {
+        'a' == input();
+        report;
+    } orelse {
+        'b' == input();
+        report;
+    } orelse {
+        'c' == input();
+        false;
+        report;
+    }
+}
