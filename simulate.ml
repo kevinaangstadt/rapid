@@ -10,6 +10,7 @@
 
 open Util
 open Language
+open Intermediate
 
 exception Fail
 
@@ -99,8 +100,10 @@ let print_reports sigma =
     Hashtbl.iter (fun k v -> Printf.printf "%d -> %d\n" k v) sigma.report
 
 let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
+    Printf.printf "%s\n" (Language.statement_to_str stmt);
     match stmt with
         | Report -> report sigma ; add_job next sigma
+        | Break -> add_job (List.tl (List.tl next)) sigma
         | Block(b) ->
             begin
             match b with
@@ -167,13 +170,10 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
 
         | ExpStmt(exp) ->
             begin
-            match exp with
-                | None -> add_job next sigma
-                | Some exp ->
-                    let value,sigma_prime = evaluate_expression exp sigma in
-                        match value with
-                            | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
-                            | _ -> add_job next sigma_prime
+            let value,sigma_prime = evaluate_expression exp sigma in
+                match value with
+                    | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
+                    | _ -> add_job next sigma_prime
             end
         | Assign((name,o),exp) ->
             let value,sigma_prime = evaluate_expression exp sigma in
@@ -183,6 +183,7 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                 add_job next sigma_prime
 
 and evaluate_expression (exp : expression) (sigma : state) : value * state =
+    Printf.printf "%s\n" (Language.exp_to_str exp) ;
     match exp.exp with
         | EQ(a,b)
         | NEQ(a,b)
@@ -190,6 +191,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | GEQ(a,b)
         | LT(a,b)
         | GT(a,b) ->
+            Printf.printf "%s\n" (Language.exp_to_str exp);
             let value_a,sigma_prime = evaluate_expression a sigma in
             let value_b,sigma_prime_prime = evaluate_expression b sigma_prime in
                 let value = match exp.exp with
@@ -239,6 +241,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | Lval((name,o)) ->
             (*TODO ARRAYS!*)
             let (Variable(_,_,Some v)) = Hashtbl.find sigma.memory name in
+            Printf.printf "VAL: %s\n" (val_to_string v) ;
             v,sigma
         | Lit(l) ->
             let value =
@@ -359,6 +362,11 @@ let simulate (Program(macros,net)) =
     end;;
 
 let process program =
+    (*print_endline (Language.program_to_str program) ;
+    print_endline "~~~~~~~~~~~~~~~~~~~~~~~~" ;
+    let lowered_program = Intermediate.intermediate program in
+        print_endline (Language.program_to_str lowered_program)*)
+    let program = Intermediate.intermediate program in
     let program_t = Tc.check program in
         simulate program_t
         

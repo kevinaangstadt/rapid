@@ -79,14 +79,16 @@ type initialize =
 
 type statement =
     | Report
+    | Break
     | Block of statement list 
     | If of expression * statement * statement
     | Either of statement list
+    | Allof of statement list
     | ForEach of param * expression * statement
     | While of expression * statement
     | VarDec of (lval * typ * initialize option) list
     | Assign of lval * expression
-    | ExpStmt of expression option 
+    | ExpStmt of expression 
     | MacroCall of string * arguments
 
 type macro = Macro of string * parameters * statement
@@ -146,8 +148,19 @@ and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (spri
 and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf "%s, " (exp_to_str v))) "" a
 
 and statement_to_str (a : statement) = match a with
+    | Break -> "break;\n"
     | Report -> "report;\n"
-    | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s %s" prev (statement_to_str s))) "" b)
+    | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s     %s" prev (statement_to_str s))) "" b)
+    | Either(e) -> begin
+        match e with
+            | [] -> ""
+            | hd :: tl -> sprintf "either %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s orelse %s" prev (statement_to_str s))) "" tl)
+        end
+    | Allof(e) -> begin
+        match e with
+            | [] -> ""
+            | hd :: tl -> sprintf "allof %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s andalso %s" prev (statement_to_str s))) "" tl)
+        end
     | If(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
     | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
@@ -159,11 +172,8 @@ and statement_to_str (a : statement) = match a with
                                         | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)
                                     in prev ^ new_var
                                  ) "" var
-    | MacroCall(a,b)  -> sprintf "%s(%s);"   a (args_to_str b)
-    | ExpStmt(exp) ->
-        match exp with
-        | Some(e) -> sprintf "%s;" (exp_to_str e)
-        | None -> "NOP"
+    | MacroCall(a,b)  -> sprintf "%s(%s);\n"   a (args_to_str b)
+    | ExpStmt(exp) -> sprintf "%s;\n" (exp_to_str exp)
 
 and exp_to_str exp = match exp.exp with
     | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)
@@ -184,7 +194,7 @@ and exp_to_str exp = match exp.exp with
     | Lit(a)        -> begin match a with
                         | StringLit(x,typ) -> sprintf "\"%s\"" x
                         | IntLit(x,typ)    -> sprintf "%d" x
-                        | CharLit(x,typ)   -> sprintf "%c" x
+                        | CharLit(x,typ)   -> sprintf "'%c'" x
                         | True             -> "true"
                         | False            -> "false"
                         end

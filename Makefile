@@ -16,6 +16,7 @@ LANG_OBJS = \
 	util.cmx \
 	automata.cmx \
 	language.cmx \
+	intermediate.cmx \
 	tc.cmx \
 	id.cmx \
 	compiler.cmx \

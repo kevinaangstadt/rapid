@@ -138,6 +138,8 @@ let check (Program(macros,network) as p) : program =
                 let typ = match a.expr_type with
                     | Boolean -> Boolean
                     | Automata -> Automata
+                    | Counter -> Counter
+                    | _ -> failwith (Printf.sprintf "failed: %s\n" (Language.exp_to_str exp))
                 in exp.expr_type <- typ ; at
                 end
             | Negative(a) ->
@@ -205,6 +207,7 @@ let check (Program(macros,network) as p) : program =
     let rec check_statement stmt gamma : environment =
         match stmt with
             | Report -> gamma
+            | Break -> gamma
             | Block(stmts) ->
                 let _ = List.fold_left (fun gamma_prime s -> check_statement s gamma_prime) gamma stmts in
                 gamma
@@ -254,11 +257,7 @@ let check (Program(macros,network) as p) : program =
                 let t = get_lval_type n gamma in
                 if t <> e.expr_type then raise (Type_error "The expression being assigned must match the type of the variable.")
                 else gamma_prime
-            | ExpStmt(e) ->
-                begin match e with
-                    | None -> gamma
-                    | Some exp -> check_exp exp gamma
-                end
+            | ExpStmt(e) -> check_exp e gamma
             | MacroCall(a,Arguments(b)) ->
                 let params = macro_map_lookup a in
                 (*make sure the arguments are correct*)  

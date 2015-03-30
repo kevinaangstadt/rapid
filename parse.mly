@@ -62,6 +62,8 @@
 %token	<Util.loc>        TELSE
 %token  <Util.loc>        TEITHER
 %token  <Util.loc>        TORELSE
+%token  <Util.loc>        TALLOF
+%token  <Util.loc>        TANDALSO
 
 %token	EOF
 
@@ -155,6 +157,7 @@ statement:
     | opt_semi_list { Block($1) }
     | if_statement { $1 }
     | either_statement { Either($1) }
+    | allof_statement { Allof($1) }
     | foreach_statement { $1 }
     | while_statement { $1 }
     | block { $1 }
@@ -213,7 +216,14 @@ either_statement:
 
 orelse_list:
     | /* empty */ { [] }
-    | TORELSE statement orelse_list { $2 :: $3 }
+    | TORELSE block orelse_list { $2 :: $3 }
+    
+allof_statement:
+    | TEITHER block andalso_list { $2 :: $3 }
+
+andalso_list:
+    | /* empty */ { [] }
+    | TORELSE block andalso_list { $2 :: $3 }
 
 if_statement:
       TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }
@@ -228,7 +238,7 @@ while_statement:
       TWHILE TLPAREN expression TRPAREN statement { While($3,$5) }
 
 expression_statement:
-      expression TSEMICOLON { ExpStmt(Some $1) }
+      expression TSEMICOLON { ExpStmt($1) }
 ;
 
 expression:

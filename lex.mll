@@ -62,6 +62,8 @@ rule initial = parse
     | "else"    { TELSE(where lexbuf) }
     | "either"  { TEITHER(where lexbuf) }
     | "orelse"  { TORELSE(where lexbuf) }
+    | "allof"   { TALLOF(where lexbuf) }
+    | "andalso" { TANDALSO(where lexbuf) }
     
     | ("0x")?['0'-'9']+ {
         let str = Lexing.lexeme lexbuf in

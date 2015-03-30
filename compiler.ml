@@ -107,7 +107,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             
             let else_clause = match stmt with
                 | If(_,_,e) -> e
-                | While(_,_) -> ExpStmt(None)
+                | While(_,_) -> Block([])
             in
             match evaluate_expression exp None id (new_seed ()) with
             | CounterExp(c,n,if_exp,yes,no,loop) ->
@@ -231,12 +231,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 (*evaluate macro*)
                 evaluate_macro m b last
             end
-        | ExpStmt(exp) ->
-            begin
-            match exp with
-                | None -> last
-                | Some e -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
-            end
+        | ExpStmt(e) -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
