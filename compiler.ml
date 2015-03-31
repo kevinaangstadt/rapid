@@ -244,7 +244,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                             ) [] elements in
                             find_last new_es
                     in
-                    let (AutomataExp(e_list)) = evaluate_expression e None "" (new_seed ()) in
+                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
                     ) StringSet.empty e_list in
@@ -252,7 +252,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     List.iter (fun e1 ->
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
                     ) last ;
-                    StringSet.elements new_last
+                    if not (StringSet.is_empty new_last) then StringSet.elements new_last else last
                 | _ -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
