@@ -231,7 +231,30 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 (*evaluate macro*)
                 evaluate_macro m b last
             end
-        | ExpStmt(e) -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
+        | ExpStmt(e) ->
+            let exp_return = evaluate_expression e None "" (new_seed ()) in
+            begin
+            match exp_return with
+                | AutomataExp(e_list) ->
+                    let rec find_last elements =
+                        if List.for_all (fun e -> (Automata.get_connections e) = []) elements then
+                            elements
+                        else
+                            let new_es = List.fold_left (fun list e ->
+                                (List.map (fun (c,_) -> c) (Automata.get_connections e)) @ list
+                            ) [] elements in
+                            find_last new_es
+                    in
+                    let new_last = List.fold_left (fun ss e ->
+                        StringSet.add (Automata.get_id e) ss
+                    ) StringSet.empty e_list in
+                    List.iter (fun e -> add_all net e) e_list;
+                    List.iter (fun e1 ->
+                        List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
+                    ) last ;
+                    StringSet.elements new_last
+                | _ -> last
+            end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
