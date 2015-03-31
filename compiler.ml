@@ -232,10 +232,9 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 evaluate_macro m b last
             end
         | ExpStmt(e) ->
-            let exp_return = evaluate_expression e None "" (new_seed ()) in
             begin
-            match exp_return with
-                | AutomataExp(e_list) ->
+            match e.expr_type with
+                | Automata ->
                     let rec find_last elements =
                         if List.for_all (fun e -> (Automata.get_connections e) = []) elements then
                             elements
@@ -245,6 +244,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                             ) [] elements in
                             find_last new_es
                     in
+                    let (AutomataExp(e_list)) = evaluate_expression e None "" (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
                     ) StringSet.empty e_list in
@@ -253,7 +253,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
                     ) last ;
                     StringSet.elements new_last
-                | _ -> last
+                | _ -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
@@ -439,7 +439,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
-                    let last = match s with Some x -> x in
+                    let last = match s with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
@@ -454,7 +454,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
-                    let last = match s with Some x -> x in
+                    let last = match s with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
