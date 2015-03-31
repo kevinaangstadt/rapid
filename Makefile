@@ -12,6 +12,9 @@ all: language simulator
 test: simulator
 	test/test.sh ; ocamlprof simulate.ml > prof.ml
 
+testap: language simulator
+	test/testap.sh
+
 LANG_OBJS = \
 	util.cmx \
 	automata.cmx \

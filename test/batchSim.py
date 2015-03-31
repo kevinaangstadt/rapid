@@ -54,7 +54,9 @@ if __name__ == '__main__':
 	args = parser.parse_args()
 
 	in_symbols_to_offsets,offsets_to_out_symbols = batchSim(args.ANML_filename,args.stimulus_file,'')
-	for (key,value) in offsets_to_out_symbols.items():
-		print key, ' -> ', len(value)
+	items_list = offsets_to_out_symbols.items()
+	items_list.sort(key = lambda tup: int(tup[0]))
+	for (key,value) in items_list:
+		print key, '->', len(value)
 	#pp(in_symbols_to_offsets)
 	#pp(offsets_to_out_symbols)
