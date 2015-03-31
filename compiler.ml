@@ -557,6 +557,19 @@ and evaluate_boolean_expression exp =
 
 and evaluate_int_expression exp =
     match exp.exp with
+        | Plus(a,b)
+        | Minus(a,b)
+        | Times(a,b)
+        | Mod(a,b) ->
+            let a_value = evaluate_int_expression a in
+            let b_value = evaluate_int_expression b in
+                begin
+                match exp.exp with
+                | Plus(_,_) -> a_value + b_value
+                | Minus(_,_) -> a_value - b_value
+                | Times(_,_) -> a_value * b_value
+                | Mod(_,_) -> a_value mod b_value
+                end
         | Negative(a) -> - (evaluate_int_expression a)
         | Lval((a,o)) ->
             let Variable(n,t,(Some (IntValue(i)))) = symbol_variable_lookup a in
