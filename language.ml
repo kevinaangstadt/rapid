@@ -172,6 +172,7 @@ and statement_to_str (a : statement) = match a with
                                         | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)
                                     in prev ^ new_var
                                  ) "" var
+    | Assign(l,e) -> sprintf "%s = %s;\n" (lval_to_str l) (exp_to_str e)
     | MacroCall(a,b)  -> sprintf "%s(%s);\n"   a (args_to_str b)
     | ExpStmt(exp) -> sprintf "%s;\n" (exp_to_str exp)
 
