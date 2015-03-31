@@ -97,7 +97,8 @@ let consume sigma : value * state =
         value,sigma_prime
         
 let print_reports sigma =
-    Hashtbl.iter (fun k v -> Printf.printf "%d -> %d\n" k v) sigma.report
+    let output = Hashtbl.fold (fun k v l -> (k,v) :: l ) sigma.report [] in
+    List.iter (fun (k,v) -> Printf.printf "%d -> %d\n" k v) (List.sort (fun (k1,_) (k2,_) -> k1-k2)  output)
 
 let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
     (*Printf.printf "%s\n" (Language.statement_to_str stmt);*)
