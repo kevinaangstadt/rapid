@@ -100,7 +100,7 @@ let print_reports sigma =
     Hashtbl.iter (fun k v -> Printf.printf "%d -> %d\n" k v) sigma.report
 
 let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
-    Printf.printf "%s\n" (Language.statement_to_str stmt);
+    (*Printf.printf "%s\n" (Language.statement_to_str stmt);*)
     match stmt with
         | Report -> report sigma ; add_job next sigma
         | Break -> add_job (List.tl (List.tl next)) sigma
@@ -183,7 +183,7 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                 add_job next sigma_prime
 
 and evaluate_expression (exp : expression) (sigma : state) : value * state =
-    Printf.printf "%s\n" (Language.exp_to_str exp) ;
+    (*Printf.printf "%s\n" (Language.exp_to_str exp) ;*)
     match exp.exp with
         | EQ(a,b)
         | NEQ(a,b)
@@ -191,9 +191,25 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | GEQ(a,b)
         | LT(a,b)
         | GT(a,b) ->
-            Printf.printf "%s\n" (Language.exp_to_str exp);
+            let rec counter_consume sigma n =
+                if n = 0 then
+                    sigma
+                else
+                    let v,sigma_prime = consume sigma in
+                        counter_consume sigma_prime (n-1)
+            in
             let value_a,sigma_prime = evaluate_expression a sigma in
             let value_b,sigma_prime_prime = evaluate_expression b sigma_prime in
+                let sigma_prime_prime_prime = match a.expr_type,b.expr_type with
+                    (* we need to consume n+4 input*)
+                    | Counter,Int ->
+                        let (IntValue(v)) = value_b in
+                        counter_consume sigma_prime_prime (v+4)
+                    | Int,Counter ->
+                        let (IntValue(v)) = value_a in
+                        counter_consume sigma_prime_prime (v+4)
+                    | _ -> sigma_prime_prime
+                in
                 let value = match exp.exp with
                     | EQ(_,_) -> value_a = value_b
                     | NEQ(_,_) -> value_a <> value_b
@@ -203,7 +219,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     | GT(_,_) -> value_a > value_b
                     
                 in
-                    BooleanValue(value),sigma_prime_prime
+                    BooleanValue(value),sigma_prime_prime_prime
         | Not(a) ->
             let BooleanValue(b),sigma_prime = evaluate_expression a sigma in
             (BooleanValue(not b)),sigma_prime
@@ -213,15 +229,13 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | And(a,b) ->
             (*TODO Make this actually fail early*)
             let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
-                if a.expr_type = Automata && not b1 then raise Fail ;
+                (*if a.expr_type = Automata && not b1 then raise Fail ;*)
                 let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
                     (BooleanValue(b1 && b2)),sigma_prime_prime
         | Or(a,b) ->
             (*TODO make this actually work like or*)
-            Printf.printf "%s (%c) \n" (exp_to_str exp) (List.hd sigma.input);
             let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
-            let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
-                Printf.printf "%s [%b %b %b]\n" (exp_to_str exp) b1 b2 (b1||b2);
+            let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma in
                 (BooleanValue(b1 || b2)),sigma_prime_prime
         | Plus(a,b)
         | Minus(a,b)
@@ -241,7 +255,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | Lval((name,o)) ->
             (*TODO ARRAYS!*)
             let (Variable(_,_,Some v)) = Hashtbl.find sigma.memory name in
-            Printf.printf "VAL: %s\n" (val_to_string v) ;
+            (*Printf.printf "VAL: %s\n" (val_to_string v) ;*)
             v,sigma
         | Lit(l) ->
             let value =
@@ -366,7 +380,7 @@ let process program =
     print_endline "~~~~~~~~~~~~~~~~~~~~~~~~" ;
     let lowered_program = Intermediate.intermediate program in
         print_endline (Language.program_to_str lowered_program)*)
-    let program = Intermediate.intermediate program in
+    (*let program = Intermediate.intermediate program in*)
     let program_t = Tc.check program in
         simulate program_t
         
