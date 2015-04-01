@@ -126,7 +126,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 Automata.connect net (c^"_trap") (c^"_trap_t") None ;
                 Automata.connect net ("n_"^c^"_trap") (c^"_trap") None ;
                 Automata.connect net (c^"_trap") c (Some "cnt") ;
-                Automata.connect net ("n_"^c^"_trap") c (Some "cnt") ;
+                (*Automata.connect net ("n_"^c^"_trap") c (Some "cnt") ;*)
                 tb := yes ;
                 fb := StringSet.add (c^"_trap_t") no ;
                 Automata.set_count net c n ;
@@ -161,7 +161,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                                     List.iter (fun s -> Automata.connect net s (Automata.get_id e) None ;
                                                         Automata.connect net s ("n_"^(Automata.get_id e)) None
                                                         ) true_last
-                                    ) if_exp ; true_last @ false_last
+                                    ) if_exp ; (*true_last @*) false_last
                     | If(_,_,_) -> true_last @ false_last
                 end
             | BooleanExp(b) ->
