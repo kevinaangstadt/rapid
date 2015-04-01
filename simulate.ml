@@ -192,12 +192,19 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
         | GEQ(a,b)
         | LT(a,b)
         | GT(a,b) ->
-            let rec counter_consume sigma n =
-                if n = 0 then
-                    sigma
-                else
-                    let v,sigma_prime = consume sigma in
-                        counter_consume sigma_prime (n-1)
+            let counter_consume sigma n =
+                let rec helper sigma n =
+                    if n = 0 then
+                        sigma
+                    else
+                        let v,sigma_prime = consume sigma in
+                            helper sigma_prime (n-1)
+                in
+                let rec consume_first sigma =
+                    let (CharValue(v)),sigma_prime = consume sigma in
+                    if v = '$' then sigma else consume_first sigma_prime
+                in
+                helper (consume_first sigma) n
             in
             let value_a,sigma_prime = evaluate_expression a sigma in
             let value_b,sigma_prime_prime = evaluate_expression b sigma_prime in
