@@ -12,6 +12,7 @@ macro test4() {
         }
         report;
     }
+    cnt.reset();
 }
 
 network () {

@@ -8,6 +8,7 @@ macro test3(String s) {
     
     if(cnt < (16-9))
         report;
+    cnt.reset();
 }
 
 network () {
