@@ -29,6 +29,7 @@ let symbol_variable_lookup (v : string) =
 let if_seed = new_seed ()
 let c_seed = new_seed ()
 let while_seed = new_seed ()
+let e_seed = new_seed ()
 
 
 let evaluate_report last=
@@ -109,7 +110,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 | If(_,_,e) -> e
                 | While(_,_) -> Block([])
             in
-            match evaluate_expression exp None id (new_seed ()) with
+            match evaluate_expression exp None None id (new_seed ()) with
             | CounterExp(c,n,if_exp,yes,no,loop) ->
             (*if this is a counter experession*)
                 begin
@@ -177,7 +178,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | ForEach((Param((name,o),t)),source,f) ->
             begin
-            let obj = evaluate_expression source None "" (new_seed ()) in
+            let obj = evaluate_expression source None None "" (new_seed ()) in
             match obj with
             | StringExp(s) ->
                 let s = explode s in
@@ -209,7 +210,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                             | None -> None
                             | Some i -> begin match i with
                                 | PrimitiveInit(e) ->
-                                    let v = evaluate_expression e None "" (new_seed ()) in
+                                    let v = evaluate_expression e None None "" (new_seed ()) in
                                     match v with
                                         | BooleanExp(b) -> Some (BooleanValue(b))
                                         | IntExp(b) -> Some (IntValue(b))
@@ -244,7 +245,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                             ) [] elements in
                             find_last new_es
                     in
-                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) in
+                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "exp_%d" (get_num e_seed)) (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
                     ) StringSet.empty e_list in
@@ -253,19 +254,25 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
                     ) last ;
                     if not (StringSet.is_empty new_last) then StringSet.elements new_last else last
-                | _ -> evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) "" (new_seed ()) ; last
+                | _ ->
+                    begin
+                    let return = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None "" (new_seed ()) in
+                    match return with
+                        | BooleanExp(false) -> []
+                        | _ -> last
+                    end
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
-and evaluate_expression (exp : expression) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
+and evaluate_expression (exp : expression) (before : Automata.element list option) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
     match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
-        | Automata -> AutomataExp(evaluate_expression_aut exp s prefix seed)
+        | Automata -> AutomataExp(evaluate_expression_aut exp before s prefix seed)
         | Int -> IntExp(evaluate_int_expression exp)
         | Char -> CharExp(evaluate_char_expression exp)
         | String -> StringExp(evaluate_string_expression exp)
-and evaluate_expression_aut (exp : expression) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
+and evaluate_expression_aut (exp : expression) (before : Automata.element list option) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
     let get_value v =
         begin
@@ -363,7 +370,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                 It should be a "last" element.  Probably have to add it in later
                 (after the fold)
             *)
-            let if_exp = evaluate_expression_aut a None prefix seed in
+            let if_exp = evaluate_expression_aut a None None prefix seed in
             List.fold_left (fun rest if_exp ->
                 let neg_exp = flip_symbol if_exp in
                 let if_exp_mod = add_conn if_exp in
@@ -384,8 +391,8 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     let temp = List.map (fun a -> (a,None)) x in
                     Automata.STE(id,set,strt,latch,temp,report)
             in
-            let b_eval = evaluate_expression_aut b None prefix seed in
-            let a_eval = evaluate_expression_aut a (Some b_eval) prefix seed in
+            let b_eval = evaluate_expression_aut b None None prefix seed in
+            let a_eval = evaluate_expression_aut a None (Some b_eval) prefix seed in
             begin
             match s with
                 | None -> a_eval
@@ -417,21 +424,21 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                         | Some x -> List.map (fun a -> (a,None)) x
                     in [Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), Automata.NotStart, false, connect, false)]
                 else
-                let b_eval = evaluate_expression_aut b s prefix seed in
+                let b_eval = evaluate_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
                     in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)), Automata.NotStart, false, connect, false) :: b_eval
             else
                 if can_condense b then
-                let a_eval = evaluate_expression_aut a s prefix seed in
+                let a_eval = evaluate_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
                     in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset b)), Automata.NotStart, false, connect, false) :: a_eval
                 else
-                    let a_eval = evaluate_expression_aut a s prefix seed in
-                    let b_eval = evaluate_expression_aut b s prefix seed in
+                    let a_eval = evaluate_expression_aut a None s prefix seed in
+                    let b_eval = evaluate_expression_aut b None s prefix seed in
                     a_eval @ b_eval
         | Fun((a,_),b,c) ->
             begin match b with
@@ -439,7 +446,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
-                    let last = match s with Some x -> x | _ -> [] in
+                    let last = match before with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
@@ -454,7 +461,7 @@ and evaluate_expression_aut (exp : expression) (s: Automata.element list option)
                     begin
                     let id = Hashtbl.find counter_rename a in
                     let counter = Hashtbl.find symbol_table id in
-                    let last = match s with Some x -> x | _ -> [] in
+                    let last = match before with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
                             let c = match v with
