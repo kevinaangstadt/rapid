@@ -248,7 +248,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "exp_%d" (get_num e_seed)) (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
-                    ) StringSet.empty e_list in
+                    ) StringSet.empty (find_last e_list) in
                     List.iter (fun e -> add_all net e) e_list;
                     List.iter (fun e1 ->
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
