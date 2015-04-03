@@ -112,22 +112,27 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                 | hd::tl -> add_job (EvaluatingStatement(hd)::EvaluatingStatement(Block(tl))::next) sigma
             end
         | If(exp,then_clause,else_clause) ->
-            let (BooleanValue(value)),sigma_prime = evaluate_expression exp sigma in
-                if value then
-                    add_job (EvaluatingStatement(then_clause)::next) sigma_prime
-                else add_job (EvaluatingStatement(else_clause)::next) sigma_prime
+            let result_list = evaluate_expression exp sigma in
+                List.iter (fun ((BooleanValue(value)),sigma_prime) ->
+                    if value then
+                        add_job (EvaluatingStatement(then_clause)::next) sigma_prime
+                    else add_job (EvaluatingStatement(else_clause)::next) sigma_prime
+                ) result_list
         | While(exp,body) ->
-            let (BooleanValue(value)),sigma_prime = evaluate_expression exp sigma in
-                if value then
-                    add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::next) sigma_prime
-                else add_job next sigma_prime
+            let result_list = evaluate_expression exp sigma in
+                List.iter (fun ((BooleanValue(value)),sigma_prime) ->
+                    if value then
+                        add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::next) sigma_prime
+                    else add_job next sigma_prime
+                ) result_list
         | Either(statement_blocks) ->
             List.iter (fun stmt ->
                 let sigma_prime = clone_state sigma in
                     add_job (EvaluatingStatement(stmt)::Converge::next) sigma_prime
             ) statement_blocks
         | ForEach((Param((name,o),t)),source,f) ->
-            let value,sigma_prime = evaluate_expression source sigma in
+            (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
+            let [(value,sigma_prime)] = evaluate_expression source sigma in
                 begin
                 match value with
                 | StringValue(s) ->
@@ -149,7 +154,8 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                             | None -> None, sigma_prime
                             (*TODO ARRAY INITS!*)
                             | Some (PrimitiveInit(e)) ->
-                                let tmp,sig_prime = evaluate_expression e sigma_prime in
+                                (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
+                                let [(tmp,sig_prime)] = evaluate_expression e sigma_prime in
                                     (Some tmp),sig_prime
                 in
                     Hashtbl.add sigma_prime_prime.memory s (Variable(s,t,value)) ;
@@ -162,7 +168,8 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
             let (MacroContainer((Macro(name,Parameters(params),stmt)))) = Hashtbl.find sigma.memory a in
             (*evaluate and assign variables*)
             let sigma_prime = List.fold_left2 (fun sigma_prime (Param((p,o),t)) arg ->
-                let value,sigma_prime_prime = evaluate_expression arg sigma_prime in
+                (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
+                let [(value,sigma_prime_prime)] = evaluate_expression arg sigma_prime in
                     names := p :: !names ;
                     Hashtbl.add sigma_prime_prime.memory p (Variable(p,t,Some value)) ;
                     sigma_prime_prime
@@ -171,19 +178,23 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
 
         | ExpStmt(exp) ->
             begin
-            let value,sigma_prime = evaluate_expression exp sigma in
-                match value with
-                    | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
-                    | _ -> add_job next sigma_prime
+            let result_list = evaluate_expression exp sigma in
+                List.iter(fun (value,sigma_prime) ->
+                    match value with
+                        | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
+                        | _ -> add_job next sigma_prime
+                ) result_list
+
             end
         | Assign((name,o),exp) ->
-            let value,sigma_prime = evaluate_expression exp sigma in
+            (*TODO THIS COULD BE VERY BAD*)
+            let [(value,sigma_prime)] = evaluate_expression exp sigma in
                 (*TODO Arrays!*)
                 let (Variable(s,t,_)) = Hashtbl.find sigma_prime.memory name in
                 Hashtbl.replace sigma_prime.memory name (Variable(s,t,(Some value))) ;
                 add_job next sigma_prime
 
-and evaluate_expression (exp : expression) (sigma : state) : value * state =
+and evaluate_expression (exp : expression) (sigma : state) : (value * state) list =
     (*Printf.printf "%s\n" (Language.exp_to_str exp) ;*)
     match exp.exp with
         | EQ(a,b)
@@ -206,8 +217,8 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                 in
                 helper (consume_first sigma) n
             in
-            let value_a,sigma_prime = evaluate_expression a sigma in
-            let value_b,sigma_prime_prime = evaluate_expression b sigma_prime in
+            let [(value_a,sigma_prime)] = evaluate_expression a sigma in
+            let [(value_b,sigma_prime_prime)] = evaluate_expression b sigma_prime in
                 let sigma_prime_prime_prime = match a.expr_type,b.expr_type with
                     (* we need to consume n+4 input*)
                     | Counter,Int ->
@@ -227,31 +238,38 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     | GT(_,_) -> value_a > value_b
                     
                 in
-                    BooleanValue(value),sigma_prime_prime_prime
+                    [(BooleanValue(value),sigma_prime_prime_prime)]
         | Not(a) ->
-            let BooleanValue(b),sigma_prime = evaluate_expression a sigma in
-            (BooleanValue(not b)),sigma_prime
+            let result_list = evaluate_expression a sigma in
+                List.map (fun (BooleanValue(b),sigma_prime) -> (BooleanValue(not b)),sigma_prime) result_list
+            
         | Negative(a) ->
-            let IntValue(i),sigma_prime = evaluate_expression a sigma in
-            (IntValue(- i)),sigma_prime
+            let [(IntValue(i),sigma_prime)] = evaluate_expression a sigma in
+            [((IntValue(- i)),sigma_prime)]
         | And(a,b) ->
-            (*TODO Make this actually fail early*)
-            let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
-                (*if a.expr_type = Automata && not b1 then raise Fail ;*)
-                let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma_prime in
-                    (BooleanValue(b1 && b2)),sigma_prime_prime
+            (*TODO Make this actually fail early?*)
+            let result_list = evaluate_expression a sigma in
+                List.flatten (List.map (fun ((BooleanValue(b1)),sigma_prime) ->
+                    let result_list2 = evaluate_expression b sigma_prime in
+                    List.map (fun ((BooleanValue(b2)),sigma_prime_prime) ->
+                        (BooleanValue(b1 && b2)),sigma_prime_prime
+                    ) result_list2
+                ) result_list)
+                    
         | Or(a,b) ->
             (*TODO make this actually work like or*)
-            let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
+            (evaluate_expression a sigma) @ (evaluate_expression b sigma)
+            (*let (BooleanValue(b1)),sigma_prime = evaluate_expression a sigma in
             let (BooleanValue(b2)),sigma_prime_prime = evaluate_expression b sigma in
-                (BooleanValue(b1 || b2)),sigma_prime_prime
+                Printf.printf "%s : %b ; %b \n" (Language.exp_to_str exp) (b1) (b2) ;
+                (BooleanValue(b1 || b2)),sigma_prime_prime*)
         | Plus(a,b)
         | Minus(a,b)
         | Times(a,b)
         | Mod(a,b) ->
             
-            let (IntValue(value_a)),sigma_prime = evaluate_expression a sigma in
-            let (IntValue(value_b)),sigma_prime_prime = evaluate_expression b sigma_prime in
+            let [((IntValue(value_a)),sigma_prime)] = evaluate_expression a sigma in
+            let [((IntValue(value_b)),sigma_prime_prime)] = evaluate_expression b sigma_prime in
                 let value = match exp.exp with
                     | Plus(_,_) -> value_a + value_b
                     | Minus(_,_) -> value_a - value_b
@@ -259,12 +277,12 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     | Mod(_,_) -> value_a mod value_b
                 
                 in
-                    IntValue(value),sigma_prime_prime
+                    [(IntValue(value),sigma_prime_prime)]
         | Lval((name,o)) ->
             (*TODO ARRAYS!*)
             let (Variable(_,_,Some v)) = Hashtbl.find sigma.memory name in
             (*Printf.printf "VAL: %s\n" (val_to_string v) ;*)
-            v,sigma
+            [(v,sigma)]
         | Lit(l) ->
             let value =
                 match l with
@@ -274,7 +292,7 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     | True -> BooleanValue(true)
                     | False -> BooleanValue(false)
             in
-                value,sigma
+                [(value,sigma)]
         | Fun((name,o),s,a) ->
             let (Variable(_,t,(Some value))) = Hashtbl.find sigma.memory name  in
                 let value =
@@ -293,8 +311,8 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                                              IntValue(0)
                             end
                 in
-                    value,sigma
-        | Input -> consume sigma
+                    [(value,sigma)]
+        | Input -> [(consume sigma)]
     
 (*and evaluate_macro ((Macro(name,Parameters(params),stmt)) : macro) (args:expression list) (sigma : state) : state =
     (* add bindings for arguments to state *)
