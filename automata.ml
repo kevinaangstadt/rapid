@@ -29,8 +29,8 @@ type element =
         (* id, symbol set, start, latch, activate on match, report on match *)
     | Counter of string * int * at_target * bool * element_connections list
         (* id, target, at_target, report on target, activate on target *)
-    | Combinatorial of string * bool * bool * element_connections list
-        (* id, eod, report on high, activate on high *)
+    | Combinatorial of combinatorial * string * bool * bool * element_connections list
+        (* type, id, eod, report on high, activate on high *)
 and element_connections = element * string option
     
 type network = {
@@ -75,13 +75,13 @@ let get_id e =
     match e with
         | STE(id,_,_,_,_,_)
         | Counter(id,_,_,_,_)
-        | Combinatorial(id,_,_,_) -> id
+        | Combinatorial(_,id,_,_,_) -> id
 
 let get_connections e =
     match e with
         | STE(_,_,_,_,connect,_)
         | Counter(_,_,_,_,connect)
-        | Combinatorial(_,_,_,connect) -> connect
+        | Combinatorial(_,_,_,_,connect) -> connect
 
 let contains (net:network ref) e =
     let id = get_id e in
@@ -108,7 +108,7 @@ let start = match start with
 end in match e with
     | STE(id,set,strt,latch,connect,report) -> add_helper net id e strt report
     | Counter(id,target,behavior,report,connect) -> add_helper net id e NotStart report
-    | Combinatorial(id,eod,report,connect) -> add_helper net id e NotStart report
+    | Combinatorial(_,id,eod,report,connect) -> add_helper net id e NotStart report
 
 let remove_element (net: network ref) e_id =
     Hashtbl.remove (!net).states e_id 
@@ -129,8 +129,8 @@ let e2_conn : element_connections = begin match terminal with
             Hashtbl.replace (!net).states e1_id (STE(id,set,strt,latch,e2_conn::connect,report))
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace (!net).states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
-        | Combinatorial(id,eod,report,connect) ->
-            Hashtbl.replace (!net).states e1_id (Combinatorial(id,eod,report,e2_conn::connect))
+        | Combinatorial(typ,id,eod,report,connect) ->
+            Hashtbl.replace (!net).states e1_id (Combinatorial(typ,id,eod,report,e2_conn::connect))
 
 let set_count (net:network ref) e_id cnt =
 let e = begin try Hashtbl.find (!net).states e_id
@@ -139,6 +139,16 @@ let e = begin try Hashtbl.find (!net).states e_id
     match e with
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace (!net).states e_id (Counter(id,cnt,behavior,report,connect))
+        | _ -> raise (Element_not_found e_id)
+    end
+
+let set_latch (net:network ref) e_id latch =
+let e = begin try Hashtbl.find (!net).states e_id
+    with Not_found -> raise (Element_not_found e_id)
+    end in begin
+    match e with
+        | Counter(id,target,behavior,report,connect) ->
+            Hashtbl.replace (!net).states e_id (Counter(id,target,latch,report,connect))
         | _ -> raise (Element_not_found e_id)
     end
 
@@ -151,8 +161,8 @@ let e = begin try Hashtbl.find (!net).states e_id
             Hashtbl.replace (!net).states e_id (STE(id,set,strt,latch,connect,r))
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace (!net).states e_id (Counter(id,target,behavior,r,connect))
-        | Combinatorial(id,eod,report,connect) ->
-            Hashtbl.replace (!net).states e_id (Combinatorial(id,eod,r,connect))
+        | Combinatorial(typ,id,eod,report,connect) ->
+            Hashtbl.replace (!net).states e_id (Combinatorial(typ,id,eod,r,connect))
     end ;
     net := {!net with report = (List.filter (fun (a,b) -> a <> e_id) (!net).report)}
     
@@ -172,7 +182,7 @@ let m_add_element macro e =
     match e with
         | STE(id,_,_,_,_,_)
         | Counter(id,_,_,_,_)
-        | Combinatorial(id,_,_,_) -> begin
+        | Combinatorial(_,id,_,_,_) -> begin
             if not (Hashtbl.mem macro.states id) then Hashtbl.add macro.states id e
             else
                 raise Duplicate_ID
@@ -192,8 +202,8 @@ if (Hashtbl.mem macro.states e1_id) then
                     Hashtbl.replace macro.states e1_id (STE(id,set,strt,latch,e2_conn::connect,report))
                 | Counter(id,target,behavior,report,connect) ->
                     Hashtbl.replace macro.states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
-                | Combinatorial(id,eod,report,connect) ->
-                    Hashtbl.replace macro.states e1_id (Combinatorial(id,eod,report,e2_conn::connect))
+                | Combinatorial(typ,id,eod,report,connect) ->
+                    Hashtbl.replace macro.states e1_id (Combinatorial(typ,id,eod,report,e2_conn::connect))
             end ; macro
     end
     else
@@ -227,8 +237,8 @@ let e = begin try Hashtbl.find macro.states e_id
             Hashtbl.replace macro.states e_id (STE(id,set,strt,latch,connect,r))
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace macro.states e_id (Counter(id,target,behavior,r,connect))
-        | Combinatorial(id,eod,report,connect) ->
-            Hashtbl.replace macro.states e_id (Combinatorial(id,eod,r,connect))
+        | Combinatorial(typ,id,eod,report,connect) ->
+            Hashtbl.replace macro.states e_id (Combinatorial(typ,id,eod,r,connect))
     end ;
     macro
 
@@ -249,13 +259,30 @@ let element_to_str e =
             | None -> begin
                 match e with
                     | STE(_,_,_,_,_,_) -> ""
+                    | Combinatorial(typ,_,_,_,_) ->
+                        begin
+                        match typ with
+                            | Inverter
+                            | OR
+                            | AND
+                            | NAND
+                            | NOR -> ""
+                            | _ -> raise Malformed_connection
+                        end
                     | _ -> raise Malformed_connection
                 end 
             | Some x -> x in
         match e with (*TODO Add lots of error-checking here*)
             | STE(id,set,strt,latch,connect,report) -> id
             | Counter(id,target,behavior,report,connect) -> id ^ ":" ^ term
-            | Combinatorial(id,eod,report,connect) -> id ^ ":" ^ term
+            | Combinatorial(typ,id,_,_,_) ->
+                match typ with
+                    | Inverter
+                    | OR
+                    | AND
+                    | NAND
+                    | NOR -> id
+                    | _ -> id ^ ":" ^ term
         
     in match e with
         | STE(id,set,strt,latch,connect,report) -> begin
@@ -275,7 +302,24 @@ let element_to_str e =
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-target element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
             "</counter>\n"
             end
-        | Combinatorial(id,eod,report,connect) -> ""
+        | Combinatorial(typ,id,eod,report,connect) ->
+            let comb_typ = match typ with
+                | Inverter -> "inverter"
+                | OR -> "or"
+                | AND -> "and"
+                | NAND -> "nand"
+                | NOR -> "nor"
+                | SOP -> "sum-of-products"
+                | POS -> "product-of-sums"
+                | NSOP -> "nsum-of-products"
+                | NPOS -> "nproduct-of-sums"
+            in
+            let rep_line =
+                if report then "<report-on-match/>\n" else "" in
+            Printf.sprintf "<%s id=\"%s\" high-only-on-eod=\"%b\">" comb_typ id eod ^
+            rep_line ^
+            List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-high element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
+            Printf.sprintf "</%s>" comb_typ
 
 let network_to_str (net:network ref) =
     let internal = ref "" in
@@ -290,7 +334,7 @@ let rec print_rec (e:element) =
     match e with
         | STE(_,_,_,_,connect,_)
         | Counter(_,_,_,_,connect)
-        | Combinatorial(_,_,_,connect) -> List.iter (fun (a,c) -> print_rec a) connect
+        | Combinatorial(_,_,_,_,connect) -> List.iter (fun (a,c) -> print_rec a) connect
 (*
 match e with
     | STE(id,set,strt,latch,connect,report) ->

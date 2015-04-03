@@ -111,16 +111,18 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 | While(_,_) -> Block([])
             in
             match evaluate_expression exp None None id (new_seed ()) with
-            | CounterExp(c,n,if_exp,yes,no,loop) ->
+            | CounterExp(c,n,if_exp,yes,no,loop,behaviour) ->
             (*if this is a counter experession*)
                 begin
-                (*(c, (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb)*)
+                (*(c, (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb,loop,behaviour)*)
                 Automata.add_element net (Automata.STE(c^"_trap","$",Automata.NotStart,false,[],false)) ;
                 Automata.add_element net (Automata.STE("n_"^c^"_trap","^$",Automata.NotStart,false,[],false)) ;
                 Automata.add_element net (Automata.STE(c^"_trap_t","\\x26",Automata.NotStart,false,[],false)) ;
                 add_all net if_exp ;
                 List.iter (fun a -> Automata.connect net a (c^"_trap") None ; Automata.connect net a ("n_"^c^"_trap") None) last ;
-                Automata.connect net loop loop None ;
+                if not (loop = "") then
+                    Automata.connect net loop loop None
+                ;
                 Automata.connect net c (Automata.get_id if_exp) None ;
                 Automata.connect net (c^"_trap") (c^"_trap")  None ;
                 Automata.connect net ("n_"^c^"_trap") ("n_"^c^"_trap") None ;
@@ -131,6 +133,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 tb := yes ;
                 fb := StringSet.add (c^"_trap_t") no ;
                 Automata.set_count net c n ;
+                Automata.set_latch net c behaviour ;
                 let true_last = evaluate_statement then_clause (StringSet.elements !tb) in
                 let false_last = evaluate_statement else_clause (StringSet.elements !fb) in
                 true_last @ false_last
@@ -513,23 +516,35 @@ and evaluate_counter_expression (exp : expression) =
             | LEQ(_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
             | LT(_,_) ->( state_list 0 num , state_list num (num + 2) ) in
         
-        (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1))
+        match exp.exp with
+            | EQ(_,_)
+            | LEQ(_,_)
+            | LT(_,_) -> (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1),Automata.Pulse)
+            | _ ->
+                begin
+                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, []) in
+                let trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",Automata.NotStart,false,[(negation,None)],false) in
+                let number = match exp.exp with
+                    | GT(_,_) -> (num+1)
+                    | GEQ(_,_) -> num
+                in (c, number, trigger, StringSet.singleton (Printf.sprintf "%s_t" c), StringSet.singleton (Printf.sprintf "%s_t_i" c), "",Automata.Latch)
+                end
         end in
     (*if counter is not listed first, flip it!*)
     match exp.exp with
         | EQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = EQ(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LEQ(b,a); })
+        | GT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LT(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
-        | GEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LT(b,a); })
+        | GEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = LEQ(b,a); })
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GT(b,a); })
+        | LEQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GEQ(b,a); })
                       else
                         helper (evaluate_int_expression b) (get_counter a)
-        | LT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GEQ(b,a); })
+        | LT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GT(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
 

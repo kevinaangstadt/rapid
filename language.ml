@@ -103,7 +103,7 @@ type container =
     | Variable of string * typ * value option
 type exp_return =
     | AutomataExp of Automata.element list
-    | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string)
+    | CounterExp of (string * int * Automata.element * StringSet.t * StringSet.t * string * Automata.at_target)
     | BooleanExp of bool
     | IntExp of int
     | CharExp of char
