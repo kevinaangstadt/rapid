@@ -212,10 +212,10 @@ and evaluate_expression (exp : expression) (sigma : state) : value * state =
                     (* we need to consume n+4 input*)
                     | Counter,Int ->
                         let (IntValue(v)) = value_b in
-                        counter_consume sigma_prime_prime (v+4)
+                        counter_consume sigma_prime_prime (v+5)
                     | Int,Counter ->
                         let (IntValue(v)) = value_a in
-                        counter_consume sigma_prime_prime (v+4)
+                        counter_consume sigma_prime_prime (v+5)
                     | _ -> sigma_prime_prime
                 in
                 let value = match exp.exp with

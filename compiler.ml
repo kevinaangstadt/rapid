@@ -524,12 +524,13 @@ and evaluate_counter_expression (exp : expression) =
             | _ ->
                 begin
                 let trigger2 = Automata.STE(Printf.sprintf "%s_t2" c,"\\x26",Automata.NotStart,false,[],false) in
-                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, [(trigger2,None)]) in
+                let trigger_not = Automata.STE(Printf.sprintf "%s_t2_n" c,"\\x26",Automata.NotStart,false,[],false) in
+                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, [(trigger_not,None)]) in
                 let trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",Automata.NotStart,false,[(negation,None);(trigger2,None)],false) in
                 let number = match exp.exp with
                     | GT(_,_) -> (num+1)
                     | GEQ(_,_) -> num
-                in (c, number, trigger, StringSet.singleton (Printf.sprintf "%s_t" c), StringSet.singleton (Printf.sprintf "%s_t_i" c), "",Automata.Latch)
+                in (c, number, trigger, StringSet.singleton (Printf.sprintf "%s_t2" c), StringSet.singleton (Printf.sprintf "%s_t2_n" c), "",Automata.Latch)
                 end
         end in
     (*if counter is not listed first, flip it!*)
