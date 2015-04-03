@@ -501,14 +501,15 @@ and evaluate_counter_expression (exp : expression) =
                     | None -> raise Negative_count
             else
                 let id = Printf.sprintf "%s_%d" c i in
-                let trigger = Automata.STE(id^"_t","\\x26",Automata.NotStart,false,[],false) in
+                let trigger2 = Automata.STE(id^"_t2","\\x26",Automata.NotStart,false,[],false) in
+                let trigger = Automata.STE(id^"_t","\\x26",Automata.NotStart,false,[(trigger2,None)],false) in
                 let connect = match e with
                     | Some x -> [(trigger,None);(x,None)]
                     | None -> [(trigger,None)] in
                     let ctr = Automata.STE(id,"$",Automata.NotStart,false,connect,false) in
                     create (i - 1) (Some ctr)
             end in
-        let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t" c a) (range low high) in
+        let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t2" c a) (range low high) in
         let (tb,fb) = match exp.exp with
             | EQ(_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
             | GT(_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
@@ -522,8 +523,9 @@ and evaluate_counter_expression (exp : expression) =
             | LT(_,_) -> (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1),Automata.Pulse)
             | _ ->
                 begin
-                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, []) in
-                let trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",Automata.NotStart,false,[(negation,None)],false) in
+                let trigger2 = Automata.STE(Printf.sprintf "%s_t2" c,"\\x26",Automata.NotStart,false,[],false) in
+                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, [(trigger2,None)]) in
+                let trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",Automata.NotStart,false,[(negation,None);(trigger2,None)],false) in
                 let number = match exp.exp with
                     | GT(_,_) -> (num+1)
                     | GEQ(_,_) -> num
