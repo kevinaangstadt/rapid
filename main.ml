@@ -4,7 +4,8 @@ let process (lexbuf : Lexing.lexbuf) =
     (*try*)
         let program = Parse.program Lex.initial lexbuf in
         let program_t = Tc.check program in
-            Compiler.compile program_t !file
+        let program_i = Intermediate.intermediate program_t in
+            Compiler.compile program_i !file
             
             (*print_endline (Language.program_to_str program) ; *)  (**)
     (*with exn ->
