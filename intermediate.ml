@@ -160,7 +160,7 @@ let resolve (Program(macros,(Network(p,stmt)))) f =
         Program(macros',net')
 
 let intermediate ast =
-    (*let ast' = resolve ast resolve_while_stmt in
-    let ast'' = resolve ast' resolve_if_stmt in
+    (*let ast' = resolve ast resolve_while_stmt in*)
+    let ast'' = resolve ast resolve_if_stmt in
         resolve ast'' resolve_exp_stmt
         (*ast''*)
