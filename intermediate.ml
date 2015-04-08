@@ -111,18 +111,18 @@ let rec resolve_if_stmt stmt =
         | If(e,s1,s2) ->
             begin
             match e.expr_type with
-                | Automata ->
-                    Either([
-                        Block([
-                            ExpStmt(e);
-                            (resolve_if_stmt s1)
-                        ]);
-                        Block([
-                            ExpStmt({e with exp = Not(e)});
-                            (resolve_if_stmt s2)
-                        ])
+            | Counter -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
+            | _ ->
+                Either([
+                    Block([
+                        ExpStmt(e);
+                        (resolve_if_stmt s1)
+                    ]);
+                    Block([
+                        ExpStmt({e with exp = Not(e)});
+                        (resolve_if_stmt s2)
                     ])
-                | _ -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
+                ])
             end
         | Either(stmts) -> Either(List.map resolve_if_stmt stmts)
         | ForEach(p,e,s1) -> ForEach(p,e,(resolve_if_stmt s1))
@@ -160,8 +160,7 @@ let resolve (Program(macros,(Network(p,stmt)))) f =
         Program(macros',net')
 
 let intermediate ast =
-    let ast' = resolve ast resolve_while_stmt in
+    (*let ast' = resolve ast resolve_while_stmt in
     let ast'' = resolve ast' resolve_if_stmt in
         resolve ast'' resolve_exp_stmt
         (*ast''*)
-        
