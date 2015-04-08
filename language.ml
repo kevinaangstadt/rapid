@@ -50,7 +50,8 @@ and expression_kind =
     | GT of expression * expression                 (* a0 > a2 *) 
     | Not of expression                             (* !b *)
     | Negative of expression                        (* -a0 *)
-    | And of expression * expression                (* b0 && b1 *) 
+    | And of expression * expression                (* b0 && b1 *)
+    | PAnd of expression * expression               (* b0 & b1 *)
     | Or of expression * expression                 (* b0 || b1 *)
     | Plus of expression * expression
     | Minus of expression * expression
@@ -186,6 +187,7 @@ and exp_to_str exp = match exp.exp with
     | Not(a)        -> sprintf "(!%s)"      (exp_to_str a)
     | Negative(a)   -> sprintf "-(%s)"    (exp_to_str a)
     | And(a,b)      -> sprintf "(%s && %s)" (exp_to_str a) (exp_to_str b)
+    | PAnd(a,b)     -> sprintf "(%s & %s)" (exp_to_str a) (exp_to_str b)
     | Or(a,b)       -> sprintf "(%s || %s)" (exp_to_str a) (exp_to_str b)
     | Plus(a,b)     -> sprintf "(%s + %s)"  (exp_to_str a) (exp_to_str b)
     | Minus(a,b)    -> sprintf "(%s - %s)"  (exp_to_str a) (exp_to_str b)

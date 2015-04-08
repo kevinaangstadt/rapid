@@ -50,6 +50,7 @@ rule initial = parse
     | "<"       { TLT(where lexbuf) }
     | ">"       { TGT(where lexbuf) }
     | "&&"      { TAND(where lexbuf) }
+    | "&"       { TPAND(where lexbuf) }
     | "||"      { TOR(where lexbuf) }
     | '!'       { TNOT(where lexbuf) }
     

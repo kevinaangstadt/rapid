@@ -54,6 +54,7 @@
 %token	<Util.loc>        TLT
 %token	<Util.loc>        TGT
 %token	<Util.loc>        TAND
+%token  <Util.loc>        TPAND
 %token	<Util.loc>        TOR
 %token	<Util.loc>        TNOT
 %token	<Util.loc>        TFOREACH
@@ -251,9 +252,13 @@ disjunction:
 ;
 
 conjunction:
-      equality                      { $1 }
-    | conjunction TAND equality     { make_exp (And($1,$3)) ($1.loc)  }
+      p_conjunction                 { $1 }
+    | conjunction TAND p_conjunction{ make_exp (And($1,$3)) ($1.loc)  }
 ;
+
+p_conjunction:
+      equality                      { $1 }
+    | p_conjunction TPAND equality  { make_exp (PAnd($1,$3)) ($1.loc) }
 
 /*(* TODO: Does this make sense to not allow chaining? *)*/
 equality:
