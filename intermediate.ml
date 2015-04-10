@@ -28,11 +28,15 @@ let rec and_or stmt =
         | While(e,s1) -> and_or s1
         | ExpStmt(e) -> e_and_or e
         | _ -> false
-        
+
+(*TODO: This does not wrok for non-equal consumes with an or inside a not
+  Nasal demons will occur in this case because no check is currently conducted
+*)        
 let rec resolve_exp exp =
     let rec starify e =
         match e.exp with
             | And(a,b) -> {e with exp = And(starify a,starify b)}
+            | PAnd(a,b) -> {e with exp = PAnd(starify a,starify b)}
             | Or(a,b) -> {e with exp = Or(starify a,starify b)}
             | EQ(a,b) -> {e with exp = EQ(starify a,starify b)}
                 (* NEQ gets flipped to EQ because we only care about consumption length *)
@@ -46,6 +50,7 @@ let rec resolve_exp exp =
             begin
             match exp.exp with 
                 | And(a,b) -> {exp with exp = And(resolve_exp a,resolve_exp b)}
+                | PAnd(a,b) -> {exp with exp = PAnd(resolve_exp a,resolve_exp b)}
                 | Or(a,b) -> {exp with exp = Or(resolve_exp a,resolve_exp b)}
                 | EQ(a,b) -> {exp with exp = EQ(resolve_exp a,resolve_exp b)}
                 | NEQ(a,b) -> {exp with exp = NEQ(resolve_exp a,resolve_exp b)}
@@ -60,6 +65,9 @@ let rec resolve_exp exp =
                                                           resolve_exp {b with exp = Not(b)}
                                                         )} in     
                             {e with exp = Or(or_1,or_2)}
+                        | PAnd(a,b) -> {e with exp = Or( resolve_exp {a with exp = Not(a)},
+                                                         resolve_exp {b with exp = Not(b)}
+                                                       )}
                         | Or(a,b) -> {e with exp = PAnd( resolve_exp {a with exp = Not(a)},
                                                          resolve_exp {b with exp = Not(b)}
                                                        )}
@@ -70,39 +78,14 @@ let rec resolve_exp exp =
                 | _ -> exp
             end
         | _ -> exp
-        
+
 let rec resolve_exp_stmt stmt =
-    let resolve_not_stmt (ExpStmt e) =
-        match e.exp with
-            | Not(exp) -> begin
-                match exp.exp with
-                    | Or(a,b) when exp.expr_type = Boolean -> resolve_exp_stmt (ExpStmt({e with exp = And({a with exp = Not(a)},{b with exp = Not(b)})}))
-                    | And(a,b) when exp.expr_type = Boolean -> resolve_exp_stmt (ExpStmt({e with exp = Or({a with exp = Not(a)},{b with exp = Not(b)})}))
-                    | Or(a,b) when exp.expr_type = Automata -> resolve_exp_stmt (Either([Allof([ExpStmt({a with exp=Not(a)}); ExpStmt(b)]); Allof([ExpStmt(a);ExpStmt({b with exp=Not(b)})])]))
-                    | And(a,b) when exp.expr_type = Automata -> resolve_exp_stmt (ExpStmt({e with exp = Or({a with exp=Not(a)},{b with exp = And({b with exp = EQ({b with exp = Lit(CharLit('*',Char))},{b with exp = Input})},{b with exp = Not(b)})})}))
-                    | EQ(a,b) -> resolve_exp_stmt (ExpStmt({e with exp = NEQ(a,b)}))
-                    | NEQ(a,b) -> resolve_exp_stmt (ExpStmt({e with exp = EQ(a,b)}))
-        
-                    | _ -> resolve_exp_stmt (ExpStmt(exp))
-            end
-    in
     match stmt with
         | Block(stmts) -> Block(List.map resolve_exp_stmt stmts)
         | Either(stmts) -> Either(List.map resolve_exp_stmt stmts)
         | ForEach(p,e,s1) -> ForEach(p,resolve_exp e,(resolve_exp_stmt s1))
         | While(e,s1) -> While(resolve_exp e,(resolve_exp_stmt s1))
-        | ExpStmt(e) ->
-            begin
-            ExpStmt(resolve_exp e)
-            (*(* TODO This won't catch something like (a&&b) == c *)
-            match e.exp with
-                | Or(a,b) -> Either([Block([(resolve_exp_stmt (ExpStmt(a)))]); Block([(resolve_exp_stmt(ExpStmt(b)))])])
-                | And(a,b) -> Block([(resolve_exp_stmt (ExpStmt(a))); (resolve_exp_stmt(ExpStmt(b)))])
-                | EQ(a,b) when e.expr_type = Boolean -> Either([Block([(resolve_exp_stmt (ExpStmt({e with exp =And(a,b)})))]); Block([(resolve_exp_stmt(ExpStmt({e with exp = And({a with exp= Not(a)},{b with exp= Not(b)})})))])])
-                | NEQ(a,b) when e.expr_type = Boolean -> Either([Block([(resolve_exp_stmt (ExpStmt({e with exp =And(a,{b with exp = Not(b)})})))]); Block([(resolve_exp_stmt(ExpStmt({e with exp = And({a with exp= Not(a)},b)})))])])
-                | Not(a) -> resolve_not_stmt stmt
-                | _ -> stmt*)
-            end
+        | ExpStmt(e) -> ExpStmt(resolve_exp e)
         | _ -> stmt
 
 let rec resolve_if_stmt stmt =

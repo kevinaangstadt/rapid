@@ -122,7 +122,8 @@ let check (Program(macros,network) as p) : program =
                     exp.expr_type <- typ ; bt
                 end
             | And(a,b)
-            | Or(a,b) ->
+            | Or(a,b)
+            | PAnd(a,b) ->
                 let at = check_exp a gamma in
                 let bt = check_exp b at in
                 begin
@@ -225,23 +226,20 @@ let check (Program(macros,network) as p) : program =
                      | Block(_) -> check_statement block gamma ; ()
                      | _ -> raise (Syntax_error "An either or orelse token must be followed by a block")
                 ) stmts ; gamma
-            | ForEach((Param((l,o),t) as p),e,s) ->
+            | ForEach((Param(l,t) as p),e,s) ->
                 begin
-                match o with
-                | NoOffset -> 
-                    let e_t = check_exp e gamma in
-                    let _ = match e.expr_type with
-                        | String -> if t <> Char then raise (Type_error "Iterating over a string requires a char parameter.")
-                        | Array(t2) -> if t <> t2 then raise (Type_error "ForEach loop type error.")
-                    in
-                    let gamma_prime = StringMap.add l t e_t in
-                    let _ = check_statement s gamma_prime in
-                    gamma
-                | _ -> raise (Type_error "Variable cannot be indexed.")
+                let e_t = check_exp e gamma in
+                let _ = match e.expr_type with
+                    | String -> if t <> Char then raise (Type_error "Iterating over a string requires a char parameter.")
+                    | Array(t2) -> if t <> t2 then raise (Type_error "ForEach loop type error.")
+                in
+                let gamma_prime = StringMap.add l t e_t in
+                let _ = check_statement s gamma_prime in
+                gamma
                 end
             | VarDec(vars) ->
                 (* TODO Don't allow Counters inside of arrays *)
-                List.fold_left (fun gamma_prime (((n,o),typ,i) as dec) ->
+                List.fold_left (fun gamma_prime ((n,typ,i) as dec) ->
                     match i with
                     | None -> StringMap.add n typ gamma_prime
                     | Some x -> match x with
@@ -285,7 +283,7 @@ let check (Program(macros,network) as p) : program =
             ;
             (* verify that there are not duplicate params
                and add the params to the var_map *)
-            let gamma = List.fold_left (fun gamma_prime (Param((s,o),t)) ->
+            let gamma = List.fold_left (fun gamma_prime (Param(s,t)) ->
                     if StringMap.mem s gamma_prime then
                         raise (Var_error (Printf.sprintf "Parameter %s has already been declared." s))
                     else
@@ -305,7 +303,7 @@ let check (Program(macros,network) as p) : program =
     
     let check_network (Network(params,stmt)) =
         let verify_network_params (Parameters(p)) gamma =
-            List.fold_left (fun gamma_prime (Param((n,_),typ)) ->
+            List.fold_left (fun gamma_prime (Param(n,typ)) ->
                 match typ with
                     | Counter -> raise (Type_error "Counters cannot be passed to a network")
                     | _ -> StringMap.add n typ gamma_prime

@@ -70,7 +70,7 @@ and offset =
 
 and lval = string * offset
 
-type param = Param of lval * typ
+type param = Param of string * typ
     
 type parameters = Parameters of param list
 
@@ -87,7 +87,7 @@ type statement =
     | Allof of statement list
     | ForEach of param * expression * statement
     | While of expression * statement
-    | VarDec of (lval * typ * initialize option) list
+    | VarDec of (string * typ * initialize option) list
     | Assign of lval * expression
     | ExpStmt of expression 
     | MacroCall of string * arguments
@@ -142,7 +142,7 @@ and lval_to_str (n,o) =
         | Index(e,o2) -> sprintf "[%s]%s" (exp_to_str e) (offset_to_str o2)
     in sprintf "%s%s" n (offset_to_str o)
     
-and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (lval_to_str a) 
+and param_to_str (Param(a,t)) = sprintf "%s %s" (typ_to_str t) (a) 
 
 and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (sprintf "%s, " (param_to_str v))) "" a
 
@@ -166,8 +166,6 @@ and statement_to_str (a : statement) = match a with
     | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
     | VarDec(var) -> List.fold_left (fun prev (s,t,i) ->
-                                    let s = lval_to_str s
-                                    in
                                     let new_var = match i with
                                         | None -> sprintf "%s %s;\n" (typ_to_str t) s
                                         | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)

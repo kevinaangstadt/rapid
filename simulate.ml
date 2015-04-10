@@ -130,7 +130,7 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                 let sigma_prime = clone_state sigma in
                     add_job (EvaluatingStatement(stmt)::Converge::next) sigma_prime
             ) statement_blocks
-        | ForEach((Param((name,o),t)),source,f) ->
+        | ForEach((Param(name,t)),source,f) ->
             (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
             let [(value,sigma_prime)] = evaluate_expression source sigma in
                 begin
@@ -141,12 +141,12 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                             (* add binding *)
                             let new_assign = (Assign((name,NoOffset),{source with exp = Lit(CharLit(c,Char))})) in
                                 EvaluatingStatement(f)::EvaluatingStatement(new_assign)::last
-                        ) [EvaluatingStatement(VarDec([(name,o),t,None]))] char_list in
+                        ) [EvaluatingStatement(VarDec([name,t,None]))] char_list in
                         add_job ((List.rev new_stmts) @ next) sigma
                 (*TODO Add Array iteration here*)
                 end
         | VarDec(var) ->
-            let sigma_prime = List.fold_left (fun sigma_prime ((s,o),t,init) ->
+            let sigma_prime = List.fold_left (fun sigma_prime (s,t,init) ->
                 let value,sigma_prime_prime = match t with
                     | Counter -> Some(IntValue(0)), sigma_prime
                     | _ ->
@@ -167,7 +167,7 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
             let names = ref [] in
             let (MacroContainer((Macro(name,Parameters(params),stmt)))) = Hashtbl.find sigma.memory a in
             (*evaluate and assign variables*)
-            let sigma_prime = List.fold_left2 (fun sigma_prime (Param((p,o),t)) arg ->
+            let sigma_prime = List.fold_left2 (fun sigma_prime (Param(p,t)) arg ->
                 (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
                 let [(value,sigma_prime_prime)] = evaluate_expression arg sigma_prime in
                     names := p :: !names ;

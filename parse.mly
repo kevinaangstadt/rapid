@@ -127,7 +127,7 @@ formal_param_dec:
             else Array((create_type (level - 1)))
         in
         let name,level = $2 in
-            Param((name,NoOffset), (create_type level))
+            Param(name, (create_type level))
     }
     
 abstract_declarator:
@@ -189,7 +189,7 @@ declarator:
 ;
 
 direct_declarator:
-      IDENT { let(a,loc) = $1 in (a,NoOffset) }
+      IDENT { let(a,loc) = $1 in a }
     /*| direct_declarator TLBRACKET TRBRACKET {  }
     | direct_declarator TLBRACKET expression TRBRACKET {  }*/
 ;

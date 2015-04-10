@@ -179,7 +179,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 complete @ terminals
             ) [] statement_blocks
             end
-        | ForEach((Param((name,o),t)),source,f) ->
+        | ForEach((Param(name,t)),source,f) ->
             begin
             let obj = evaluate_expression source None None "" (new_seed ()) in
             match obj with
@@ -197,7 +197,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | VarDec(var) ->
             begin
-            List.iter (fun ((s,o),t,init) ->
+            List.iter (fun (s,t,init) ->
                 (*TODO support list*)
                 let (id,value) =
                     match t with
@@ -387,12 +387,25 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             end
         (*| Negative(a)*)
         | And(a,b) ->
-            let rec add_to_last (Automata.STE(id,set,strt,latch,connect,report) as start) x =
-                match connect with
-                | hd :: tl -> Automata.STE(id,set,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
-                | [] ->
-                    let temp = List.map (fun a -> (a,None)) x in
-                    Automata.STE(id,set,strt,latch,temp,report)
+            let rec add_to_last start x =
+                match start with
+                    | Automata.STE(id,set,strt,latch,connect,report) ->
+                        begin
+                        match connect with
+                        | hd :: tl -> Automata.STE(id,set,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
+                        | [] ->
+                            let temp = List.map (fun a -> (a,None)) x in
+                            Automata.STE(id,set,strt,latch,temp,report)
+                        end
+                    | Automata.Combinatorial(typ,id,eod,report,connect) ->
+                        begin
+                        match connect with
+                        | hd :: tl -> Automata.Combinatorial(typ, id, eod, report, List.map (fun (a,s) -> ((add_to_last a x),s)) connect)
+                        | [] ->
+                            let temp = List.map (fun a -> (a,None)) x in
+                            Automata.Combinatorial(typ,id,eod,report,temp)
+                        end
+                        
             in
             let b_eval = evaluate_expression_aut b None None prefix seed in
             let a_eval = evaluate_expression_aut a None (Some b_eval) prefix seed in
@@ -401,6 +414,16 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 | None -> a_eval
                 | Some x -> List.map (fun a -> add_to_last a x) a_eval
             end
+        | PAnd(a,b) ->
+            (*Evaluate separately and then combine with an AND gate*)
+            let connect = match s with
+                        | None -> []
+                        | Some x -> List.map (fun a -> (a,None)) x
+            in
+            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, connect) in
+            let a_eval = evaluate_expression_aut a None (Some [join]) prefix seed in
+            let b_eval = evaluate_expression_aut b None (Some [join]) prefix seed in
+                a_eval@b_eval
         | Or(a,b) ->
             (*TODO Do we do this here, or at a later optimization stage?*)
             let rec build_charset c =
@@ -418,7 +441,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     | EQ(_,_)
                     | NEQ(_,_) -> true
                     | Or(a,b) -> (can_condense a) && (can_condense b)
-                    | And(_,_) -> false
+                    | And(_,_)
+                    | PAnd(_,_) -> false
                 in
             if can_condense a then
                 if can_condense b then
@@ -627,7 +651,7 @@ and evaluate_string_expression exp =
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
-    List.iter2 (fun (Param((p,o),t)) arg ->
+    List.iter2 (fun (Param(p,t)) arg ->
         let value =
             begin
             (*TODO allow for offsets*)
@@ -654,7 +678,7 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         | Block(b) -> evaluate_statement stmt last
     ) in  begin
     (* remove those bindings again *)
-    List.iter(fun (Param((p,o),t)) -> Hashtbl.remove symbol_table p) params ;
+    List.iter(fun (Param(p,t)) -> Hashtbl.remove symbol_table p) params ;
     StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
     symbol_scope := StringSet.empty ;
     end ; return
