@@ -65,6 +65,7 @@
 %token  <Util.loc>        TORELSE
 %token  <Util.loc>        TALLOF
 %token  <Util.loc>        TANDALSO
+%token  <Util.loc>        TSOME
 
 %token	EOF
 
@@ -158,6 +159,7 @@ statement:
     | opt_semi_list { Block($1) }
     | if_statement { $1 }
     | either_statement { Either($1) }
+    | some_statement { $1 }
     | allof_statement { Allof($1) }
     | foreach_statement { $1 }
     | while_statement { $1 }
@@ -206,6 +208,11 @@ initialize_list:
 ;
 
 typ:
+    | basic_typ { $1 }
+    | typ TLBRACKET TRBRACKET { Array($1) }
+;
+
+basic_typ:
       TINT { Int }
     | TSTRING { String }
     | TCHAR { Char }
@@ -214,21 +221,29 @@ typ:
 
 either_statement:
     | TEITHER block orelse_list { $2 :: $3 }
+;
 
 orelse_list:
     | /* empty */ { [] }
     | TORELSE block orelse_list { $2 :: $3 }
-    
+;
+
 allof_statement:
     | TEITHER block andalso_list { $2 :: $3 }
+;
 
 andalso_list:
     | /* empty */ { [] }
     | TORELSE block andalso_list { $2 :: $3 }
+;
 
 if_statement:
       TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }
     | TIF TLPAREN expression TRPAREN statement TELSE statement { If($3,$5,$7) }
+;
+
+some_statement:
+    | TSOME TLPAREN formal_param_dec TCOLON operand TRPAREN statement { SomeStmt($3,$5,$7) }
 ;
 
 foreach_statement:
@@ -237,6 +252,7 @@ foreach_statement:
 
 while_statement:
       TWHILE TLPAREN expression TRPAREN statement { While($3,$5) }
+;
 
 expression_statement:
       expression TSEMICOLON { ExpStmt($1) }

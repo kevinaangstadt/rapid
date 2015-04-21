@@ -28,13 +28,6 @@ type literal =
     | True
     | False
 
-type value =
-    | StringValue of string
-    | IntValue of int
-    | CharValue of char
-    | BooleanValue of bool
-    | AutomataElement of Automata.element
-
 type expression = {
     exp : expression_kind ;
     mutable expr_type : typ ;
@@ -84,6 +77,7 @@ type statement =
     | Block of statement list 
     | If of expression * statement * statement
     | Either of statement list
+    | SomeStmt of param * expression * statement
     | Allof of statement list
     | ForEach of param * expression * statement
     | While of expression * statement
@@ -99,6 +93,20 @@ type network = Network of parameters * statement
 type program = Program of macro list * network
 
 (* Used in the Symbol Table *)
+type array_type =
+    | IntArray of int array
+    | StringArray of string array
+    | CharArray of char array
+    | BooleanArray of bool array
+
+type value =
+    | StringValue of string
+    | IntValue of int
+    | CharValue of char
+    | BooleanValue of bool
+    | AutomataElement of Automata.element
+    | ArrayValue of value option array
+    
 type container =
     | MacroContainer of macro
     | Variable of string * typ * value option
@@ -109,7 +117,10 @@ type exp_return =
     | IntExp of int
     | CharExp of char
     | StringExp of string
+    | ArrayExp of value option array
 type symbol = (string, container) Hashtbl.t
+
+
 
 
 (* Printing functions *)
@@ -130,7 +141,7 @@ and typ_to_str t = match t with
     | Boolean ->"bool"
     | NoType -> "ERROR!"
     | Automata->"Automata(internal)"
-    | Array(t)->typ_to_str t
+    | Array(t)->typ_to_str t ^ "[]"
 
 and init_to_str i = match i with
     | PrimitiveInit(e) -> exp_to_str e
@@ -157,6 +168,7 @@ and statement_to_str (a : statement) = match a with
             | [] -> ""
             | hd :: tl -> sprintf "either %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s orelse %s" prev (statement_to_str s))) "" tl)
         end
+    | SomeStmt(var,exp,s) -> sprintf "some( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
     | Allof(e) -> begin
         match e with
             | [] -> ""

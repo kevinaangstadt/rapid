@@ -10,7 +10,16 @@ macro hamming_distance (String s, int d) {
 }
 
 network () {
-    hamming_distance("AGTC",2);
+    {
+        String[] array = { "AGTC","GTCT","TCTC","CTCT","TCTC","CTCG",
+        "TCGA","CGAG","TTAG","TAGA","AGAC","GACG","ACGG","CGGT","GGTC",
+        "GTCA","GATC","ATCA","TCAG","CAGT","AGTT","GTTC","TTCA","TCAC" } ;
+        
+        some (String s : array) {
+            hamming_distance(s,2);
+        }
+    }
+    /*hamming_distance("AGTC",2);
     hamming_distance("GTCT",2);
     hamming_distance("TCTC",2);
     hamming_distance("CTCT",2);
@@ -33,5 +42,5 @@ network () {
     hamming_distance("AGTT",2);
     hamming_distance("GTTC",2);
     hamming_distance("TTCA",2);
-    hamming_distance("TCAC",2);
+    hamming_distance("TCAC",2);*/
 }

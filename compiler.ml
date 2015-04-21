@@ -179,6 +179,29 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 complete @ terminals
             ) [] statement_blocks
             end
+        | SomeStmt((Param(name,t)),source,f) ->
+            begin
+            let obj = evaluate_expression source None None "" (new_seed ()) in
+            match obj with
+            | StringExp(s) ->
+                let s = explode s in
+                    List.fold_left (fun new_last c ->
+                        let c = CharValue(c) in
+                        (*set binding to 'name'*)
+                        Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                        let return = evaluate_statement f last in
+                        (*remove binding*)
+                        Hashtbl.remove symbol_table name ; new_last @ return
+                    ) last s
+            | ArrayExp(a) ->
+                Array.fold_left (fun new_last (Some c) ->
+                    Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                    let return = evaluate_statement f last in
+                    (*remove binding*)
+                    Hashtbl.remove symbol_table name ; new_last @ return
+                ) last a
+            (* TODO add some sort of array exp*)
+            end
         | ForEach((Param(name,t)),source,f) ->
             begin
             let obj = evaluate_expression source None None "" (new_seed ()) in
@@ -193,9 +216,31 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; return
                     ) last s
+            | ArrayExp(a) ->
+                Array.fold_left (fun last (Some c) ->
+                    Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                    let return = evaluate_statement f last in
+                    (*remove binding*)
+                    Hashtbl.remove symbol_table name ; return
+                ) last a
             (* TODO add some sort of array exp*)
             end
         | VarDec(var) ->
+            let rec gen_value init =
+                match init with
+                    | PrimitiveInit(e) ->
+                        let v = evaluate_expression e None None "" (new_seed ()) in
+                        begin
+                        match v with
+                            | BooleanExp(b) -> Some (BooleanValue(b))
+                            | IntExp(b) -> Some (IntValue(b))
+                            | StringExp(s) -> Some (StringValue(s))
+                        end
+                    | ArrayInit(e) ->
+                        let i_list = List.map gen_value e in
+                        let a = Array.of_list i_list in
+                            Some (ArrayValue(a))
+            in
             begin
             List.iter (fun (s,t,init) ->
                 (*TODO support list*)
@@ -211,14 +256,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     | _ ->
                         let x = match init with
                             | None -> None
-                            | Some i -> begin match i with
-                                | PrimitiveInit(e) ->
-                                    let v = evaluate_expression e None None "" (new_seed ()) in
-                                    match v with
-                                        | BooleanExp(b) -> Some (BooleanValue(b))
-                                        | IntExp(b) -> Some (IntValue(b))
-                                        | StringExp(s) -> Some (StringValue(s))
-                                end
+                            | Some i -> gen_value i
                         in (s,x) in
                 (* TODO We need some notion of scope to remove these after the fact! *)
                 Hashtbl.add symbol_table id (Variable(id,t,value)) ;
@@ -268,6 +306,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (before : Automata.element list option) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
+    print_endline (typ_to_str exp.expr_type) ;
     match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
@@ -275,6 +314,7 @@ and evaluate_expression (exp : expression) (before : Automata.element list optio
         | Int -> IntExp(evaluate_int_expression exp)
         | Char -> CharExp(evaluate_char_expression exp)
         | String -> StringExp(evaluate_string_expression exp)
+        | Array(_) -> ArrayExp(evaluate_array_expression exp)
 and evaluate_expression_aut (exp : expression) (before : Automata.element list option) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
     let get_value v =
@@ -648,6 +688,12 @@ and evaluate_string_expression exp =
         | Lit(a) -> begin match a with
                       | StringLit(x,_) -> x
                     end
+
+and evaluate_array_expression exp =
+    match exp.exp with
+        | Lval((a,o)) ->
+            let Variable(n,t,(Some (ArrayValue(s)))) = symbol_variable_lookup a in
+                s
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
@@ -660,7 +706,12 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
                     let variable = Hashtbl.find symbol_table s in
                     begin
                     match variable with
-                        | Variable(name,t,value) -> value
+                        | Variable(name,t,value) ->
+                            begin
+                            match o2 with
+                                | NoOffset -> value
+                                | _ -> failwith "need to handle offsets"
+                            end
                         | _ -> raise (Syntax_error "")
                     end
                 | Lit(l) ->

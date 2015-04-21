@@ -226,12 +226,13 @@ let check (Program(macros,network) as p) : program =
                      | Block(_) -> check_statement block gamma ; ()
                      | _ -> raise (Syntax_error "An either or orelse token must be followed by a block")
                 ) stmts ; gamma
-            | ForEach((Param(l,t) as p),e,s) ->
+            | ForEach((Param(l,t) as p),e,s)
+            | SomeStmt((Param(l,t) as p),e,s) ->
                 begin
                 let e_t = check_exp e gamma in
                 let _ = match e.expr_type with
                     | String -> if t <> Char then raise (Type_error "Iterating over a string requires a char parameter.")
-                    | Array(t2) -> if t <> t2 then raise (Type_error "ForEach loop type error.")
+                    | Array(t2) -> if t <> t2 then raise (Type_error "ForEach/Some loop type error.")
                 in
                 let gamma_prime = StringMap.add l t e_t in
                 let _ = check_statement s gamma_prime in
@@ -248,6 +249,15 @@ let check (Program(macros,network) as p) : program =
                             if typ = e.expr_type then
                                 StringMap.add n typ gamma_prime
                             else raise (Type_error "Initialized value does not match type.")
+                        | ArrayInit(e) ->
+                            let rec check_array a =
+                                match a with
+                                    | PrimitiveInit(e) -> check_exp e gamma_prime ; ()
+                                    | ArrayInit(e) -> List.iter (fun a -> check_array a ; ()) e
+                            in
+                            print_endline "TC Warning: Array init not checked";
+                            check_array x ;
+                            StringMap.add n typ gamma_prime
                         (*TODO handle type checking for array initializers!*)
                 ) gamma (List.rev vars)
             | Assign(n,e) ->
