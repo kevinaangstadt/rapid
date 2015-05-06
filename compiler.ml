@@ -7,9 +7,18 @@ open Language (* Contains all the types for the AP language *)
 open Id (*For counting on IDs*)
 open Util
 
+(*Helper function if needed for debugging*)
+let val_to_string value =
+    match value with
+        | StringValue(s) -> s
+        | IntValue(i) -> Printf.sprintf "%d" i
+        | CharValue(c) -> Printf.sprintf "%c" c
+        | BooleanValue(b) -> Printf.sprintf "%b" b
+        | AutomataElement(_) -> "Automata"
 
 let symbol_table : symbol = Hashtbl.create 255
 
+let return_list = ref StringSet.empty
 
 let symbol_scope = ref StringSet.empty
 let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 10
@@ -54,14 +63,14 @@ let rec add_all net (e:Automata.element) =
         Automata.add_element net e ;
         List.iter (fun (a,c) -> add_all net a) connect
 
-let rec evaluate_statement (stmt : statement) (last : string list) : string list =
+let rec evaluate_statement (stmt : statement) (last : string list) (label : string) : string list =
     match stmt with
-        | Report -> List.iter (fun s->evaluate_report s) last ; last
-        | Block(b) -> List.fold_left (fun last a -> evaluate_statement a last) last b
+        | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; last
+        | Block(b) -> List.fold_left (fun last a -> evaluate_statement a last label) last b
         | If(exp,then_clause,_)
         | While(exp,then_clause) ->
             begin
-            let id = Printf.sprintf "if_%d" (get_num if_seed) in
+            let id = Printf.sprintf "%s_if_%d" label (get_num if_seed) in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
             let tb = ref StringSet.empty in
             let fb = ref StringSet.empty in
@@ -118,6 +127,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 Automata.add_element net (Automata.STE(c^"_trap","$",Automata.NotStart,false,[],false)) ;
                 Automata.add_element net (Automata.STE("n_"^c^"_trap","^$",Automata.NotStart,false,[],false)) ;
                 Automata.add_element net (Automata.STE(c^"_trap_t","\\x26",Automata.NotStart,false,[],false)) ;
+                Automata.add_element net (Automata.STE(c^"_trap_t2","\\x26",Automata.NotStart,false,[],false)) ;
                 add_all net if_exp ;
                 List.iter (fun a -> Automata.connect net a (c^"_trap") None ; Automata.connect net a ("n_"^c^"_trap") None) last ;
                 if not (loop = "") then
@@ -127,15 +137,16 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                 Automata.connect net (c^"_trap") (c^"_trap")  None ;
                 Automata.connect net ("n_"^c^"_trap") ("n_"^c^"_trap") None ;
                 Automata.connect net (c^"_trap") (c^"_trap_t") None ;
+                Automata.connect net (c^"_trap_t") (c^"_trap_t2") None ;
                 Automata.connect net ("n_"^c^"_trap") (c^"_trap") None ;
                 Automata.connect net (c^"_trap") c (Some "cnt") ;
                 (*Automata.connect net ("n_"^c^"_trap") c (Some "cnt") ;*)
                 tb := yes ;
-                fb := StringSet.add (c^"_trap_t") no ;
+                fb := StringSet.add (c^"_trap_t2") no ;
                 Automata.set_count net c n ;
                 Automata.set_latch net c behaviour ;
-                let true_last = evaluate_statement then_clause (StringSet.elements !tb) in
-                let false_last = evaluate_statement else_clause (StringSet.elements !fb) in
+                let true_last = evaluate_statement then_clause (StringSet.elements !tb) label in
+                let false_last = evaluate_statement else_clause (StringSet.elements !fb) label in
                 true_last @ false_last
                 end
             (*this is a regular if*)
@@ -158,8 +169,8 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         Automata.connect net s (Automata.get_id neg_exp) None
                     ) last
                 ) if_exp ;
-                let true_last = evaluate_statement then_clause (StringSet.elements !tb) in
-                let false_last = evaluate_statement else_clause (StringSet.elements !fb) in
+                let true_last = evaluate_statement then_clause (StringSet.elements !tb) label in
+                let false_last = evaluate_statement else_clause (StringSet.elements !fb) label in
                     match stmt with
                     | While(_,_) -> List.iter (fun e ->
                                     List.iter (fun s -> Automata.connect net s (Automata.get_id e) None ;
@@ -169,19 +180,19 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     | If(_,_,_) -> true_last @ false_last
                 end
             | BooleanExp(b) ->
-                if b then evaluate_statement then_clause last
-                else evaluate_statement else_clause last
+                if b then evaluate_statement then_clause last label
+                else evaluate_statement else_clause last label
             end
         | Either(statement_blocks) ->
             begin
             List.fold_left( fun complete stmt ->
-                let terminals = evaluate_statement stmt last in
+                let terminals = evaluate_statement stmt last label in
                 complete @ terminals
             ) [] statement_blocks
             end
         | SomeStmt((Param(name,t)),source,f) ->
             begin
-            let obj = evaluate_expression source None None "" (new_seed ()) in
+            let obj = evaluate_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
                 let s = explode s in
@@ -189,14 +200,14 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = evaluate_statement f last in
+                        let return = evaluate_statement f last label in
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; new_last @ return
                     ) last s
             | ArrayExp(a) ->
                 Array.fold_left (fun new_last (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = evaluate_statement f last in
+                    let return = evaluate_statement f last label in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                 ) last a
@@ -204,7 +215,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             end
         | ForEach((Param(name,t)),source,f) ->
             begin
-            let obj = evaluate_expression source None None "" (new_seed ()) in
+            let obj = evaluate_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
                 let s = explode s in
@@ -212,14 +223,14 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = evaluate_statement f last in
+                        let return = evaluate_statement f last label in
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; return
                     ) last s
             | ArrayExp(a) ->
                 Array.fold_left (fun last (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = evaluate_statement f last in
+                    let return = evaluate_statement f last label in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; return
                 ) last a
@@ -229,7 +240,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
             let rec gen_value init =
                 match init with
                     | PrimitiveInit(e) ->
-                        let v = evaluate_expression e None None "" (new_seed ()) in
+                        let v = evaluate_expression e None None label (new_seed ()) in
                         begin
                         match v with
                             | BooleanExp(b) -> Some (BooleanValue(b))
@@ -248,7 +259,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     match t with
                     | Counter ->
                         let num = get_num c_seed in
-                        let id = Printf.sprintf "%s_%d" s num in
+                        let id = Printf.sprintf "%s_%s_%d" label s num in
                         let _ = Hashtbl.add counter_rename s id in
                         let _ = Hashtbl.add symbol_table s (Variable(id,t,None)) in
                         symbol_scope := StringSet.add s !symbol_scope ;
@@ -286,7 +297,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                             ) [] elements in
                             find_last new_es
                     in
-                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "exp_%d" (get_num e_seed)) (new_seed ()) in
+                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "%s_exp_%d" label (get_num e_seed)) (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
                     ) StringSet.empty (find_last e_list) in
@@ -297,7 +308,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
                     if not (StringSet.is_empty new_last) then StringSet.elements new_last else last
                 | _ ->
                     begin
-                    let return = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None "" (new_seed ()) in
+                    let return = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
                     match return with
                         | BooleanExp(false) -> []
                         | _ -> last
@@ -306,7 +317,6 @@ let rec evaluate_statement (stmt : statement) (last : string list) : string list
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
 and evaluate_expression (exp : expression) (before : Automata.element list option) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
-    print_endline (typ_to_str exp.expr_type) ;
     match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | Counter -> CounterExp(evaluate_counter_expression exp)
@@ -697,6 +707,7 @@ and evaluate_array_expression exp =
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
+    let s = ref name in
     List.iter2 (fun (Param(p,t)) arg ->
         let value =
             begin
@@ -722,17 +733,21 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
                         | CharLit(s,_) -> Some (CharValue(s))
                     end
             end in
+        let (Some(v)) = value in
+        s := Printf.sprintf "%s_%s" !s (val_to_string v) ; 
         Hashtbl.add symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
-    let return = (match stmt with
-        | Block(b) -> evaluate_statement stmt last
-    ) in  begin
+    match stmt with
+        | Block(b) -> evaluate_statement stmt last !s
+    ;
     (* remove those bindings again *)
     List.iter(fun (Param(p,t)) -> Hashtbl.remove symbol_table p) params ;
     StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
     symbol_scope := StringSet.empty ;
-    end ; return
+    let return = StringSet.elements !return_list in
+        return_list := StringSet.empty
+        ; return
 
 let compile (Program(macros,network)) name =
     
@@ -748,7 +763,7 @@ let compile (Program(macros,network)) name =
                     let start_str = Printf.sprintf "start_%d" (get_num seed) in
                     let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
                     let _ = Automata.add_element net start in
-                    evaluate_statement s [start_str] ; () ) b
+                    evaluate_statement s [start_str] "" ; () ) b
                 end
     ;
     Automata.set_name net name ;

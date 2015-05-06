@@ -24,3 +24,4 @@ let rec sublist b l =
         | hd :: tl ->
             let tail = sublist (b-1) tl in
                 if b>0 then tail else hd :: tail
+                
