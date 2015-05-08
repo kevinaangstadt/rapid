@@ -58,7 +58,7 @@ exception Element_not_found of string
 exception Malformed_connection
 
 let create name desc = ref {
-    states = Hashtbl.create 255;
+    states = Hashtbl.create 1000000;
     start = [];
     report = [];
     last = None;
@@ -286,10 +286,15 @@ let element_to_str e =
         
     in match e with
         | STE(id,set,strt,latch,connect,report) -> begin
+            let set_to_str set =
+                if (set.[0] = '^') then "[" ^ set ^ "@$\\x26]"
+                else if (set.[0] = '\\') then "[" ^ set ^ "]"
+                else set
+            in
             let rep_line =
                 if report then "<report-on-match/>\n" else "" in
             let latch_str = if latch then "latch=\"true\"" else "" in
-            Printf.sprintf "<state-transition-element id=\"%s\" symbol-set=\"%s\" start=\"%s\" %s>\n" id set (start_to_str strt) latch_str ^
+            Printf.sprintf "<state-transition-element id=\"%s\" symbol-set=\"%s\" start=\"%s\" %s>\n" id (set_to_str set) (start_to_str strt) latch_str ^
             rep_line ^
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-match element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
             "</state-transition-element>\n"
@@ -328,7 +333,13 @@ let network_to_str (net:network ref) =
     (Printf.sprintf "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description )^ (*TODO figure out how to get an actual name here*)
     !internal ^
     "</automata-network>"
-    
+
+let network_to_file (net:network ref) (channel:out_channel) =
+    Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
+    Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description ;
+    Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
+    Printf.fprintf channel "</automata-network>"
+
 let rec print_rec (e:element) =
     let _ = print_endline (element_to_str e) in
     match e with
