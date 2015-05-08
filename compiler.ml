@@ -21,7 +21,7 @@ let symbol_table : symbol = Hashtbl.create 255
 let return_list = ref StringSet.empty
 
 let symbol_scope = ref StringSet.empty
-let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 10
+let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 1000000
 let net = Automata.create "" ""
 
 let symbol_variable_lookup (v : string) =
@@ -212,6 +212,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                     Hashtbl.remove symbol_table name ; new_last @ return
                 ) last a
             (* TODO add some sort of array exp*)
+            
             end
         | ForEach((Param(name,t)),source,f) ->
             begin
@@ -305,7 +306,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                     List.iter (fun e1 ->
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
                     ) last ;
-                    if not (StringSet.is_empty new_last) then StringSet.elements new_last else last
+                    if not (StringSet.is_empty new_last) then StringSet.elements new_last else last 
                 | _ ->
                     begin
                     let return = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
@@ -708,6 +709,11 @@ and evaluate_array_expression exp =
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
     let s = ref name in
+    (*back up symbol scope and create a new one*)
+    let scope_backup = !symbol_scope in
+    let return_backup = !return_list in
+    return_list := StringSet.empty ;
+    symbol_scope := StringSet.empty ;
     List.iter2 (fun (Param(p,t)) arg ->
         let value =
             begin
@@ -718,6 +724,13 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
                     begin
                     match variable with
                         | Variable(name,t,value) ->
+                            begin
+                            (*keep track of counter rename*)
+                            match t with
+                                | Counter -> Hashtbl.add counter_rename p name
+                                | _ -> ()
+                            end
+                            ;
                             begin
                             match o2 with
                                 | NoOffset -> value
@@ -733,21 +746,34 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
                         | CharLit(s,_) -> Some (CharValue(s))
                     end
             end in
-        let (Some(v)) = value in
+        let v = match value with
+            | Some(v) -> v
+            | _ -> StringValue("")
+        in
         s := Printf.sprintf "%s_%s" !s (val_to_string v) ; 
         Hashtbl.add symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
-    match stmt with
+    let last = match stmt with
         | Block(b) -> evaluate_statement stmt last !s
-    ;
+    in
     (* remove those bindings again *)
-    List.iter(fun (Param(p,t)) -> Hashtbl.remove symbol_table p) params ;
+    List.iter(fun (Param(p,t)) ->
+        begin
+        match t with
+            | Counter -> Hashtbl.remove counter_rename p
+            | _ -> ()
+        end;
+        Hashtbl.remove symbol_table p) params ;
     StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
-    symbol_scope := StringSet.empty ;
-    let return = StringSet.elements !return_list in
-        return_list := StringSet.empty
-        ; return
+    symbol_scope := scope_backup ;
+    let return : string list =
+        if StringSet.is_empty !return_list then last
+        else
+            StringSet.elements !return_list
+    in
+        return_list := return_backup ;
+         return
 
 let compile (Program(macros,network)) name =
     
@@ -766,6 +792,7 @@ let compile (Program(macros,network)) name =
                     evaluate_statement s [start_str] "" ; () ) b
                 end
     ;
-    Automata.set_name net name ;
-    (Automata.network_to_str net)
+    Automata.set_name net name ; net (*;
+    let return = (Automata.network_to_str net) in
+        Printf.printf "pong\n%!" ; return*)
 

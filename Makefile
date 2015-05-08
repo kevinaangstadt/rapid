@@ -42,10 +42,10 @@ clean:
 	$(OCAMLLEX) $<
 	
 language: $(LANG_OBJS) main.cmx
-	$(OCAMLOPT) -o language str.cmxa $(LANG_OBJS) main.cmx
+	$(OCAMLOPT)  -o language str.cmxa $(LANG_OBJS) main.cmx
 	
 simulator: $(LANG_OBJS) simulate.cmx
-	$(OCAMLOPT) -p -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
+	$(OCAMLOPT)  -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
 
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

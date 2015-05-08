@@ -5,8 +5,18 @@ let process (lexbuf : Lexing.lexbuf) =
         let program = Parse.program Lex.initial lexbuf in
         let program_t = Tc.check program in
         let program_i = Intermediate.intermediate program_t in
+        (* Let's remove path from the file name and use that to name the network*)
+        let net_name =
+            let trim_front =
+                try
+                    let loc = (String.rindex !file '/') in
+                    String.sub !file (loc + 1) ((String.length !file) - (loc + 1))
+                with Not_found -> !file
+            in
+                String.map (fun c -> if c = '.' then '_' else c) trim_front
+        in
             (*print_endline (Language.program_to_str program_i) ;*)
-            Compiler.compile program_i !file
+            Compiler.compile program_i net_name
             
             (*print_endline (Language.program_to_str program) ; *)  (**)
     (*with exn ->
@@ -48,7 +58,7 @@ let argspec = Arg.align argspec in
     let anml = read_file !file in
     try
         let channel = open_out !output in
-        Printf.fprintf channel "%s" anml ;
+        (Automata.network_to_file anml channel) ;
         close_out channel
     with Sys_error _ ->
         Printf.printf "Failed to write output" ; exit (-1)
