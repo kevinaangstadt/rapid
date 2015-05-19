@@ -106,6 +106,7 @@ type value =
     | BooleanValue of bool
     | AutomataElement of Automata.element
     | ArrayValue of value option array
+    | AbstractValue of Config.size
     
 type container =
     | MacroContainer of macro

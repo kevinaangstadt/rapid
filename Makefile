@@ -17,6 +17,7 @@ testap: language simulator
 
 LANG_OBJS = \
 	util.cmx \
+    config.cmx \
 	automata.cmx \
 	language.cmx \
 	intermediate.cmx \
@@ -24,10 +25,12 @@ LANG_OBJS = \
 	id.cmx \
 	compiler.cmx \
 	parse.cmx \
-	lex.cmx
+	lex.cmx \
+    config_parse.cmx \
+    config_lex.cmx
 
 clean: 
-	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli language language.exe rapidsim rapidsim.exe ocamlprof.dump prof.ml
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli config_lex.ml config_parse.ml config_parse.mli language language.exe rapidsim rapidsim.exe ocamlprof.dump prof.ml
 
 %.cmi: %.mli
 	$(OCAMLOPT) -c -p $<
@@ -47,5 +50,6 @@ language: $(LANG_OBJS) main.cmx
 simulator: $(LANG_OBJS) simulate.cmx
 	$(OCAMLOPT)  -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
 
+config_parse.cmx: config_parse.cmi config_parse.ml
 parse.cmx: parse.cmi parse.ml
 main.cmx: parse.cmi

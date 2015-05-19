@@ -4,8 +4,11 @@
  *)
  
 open Language (* Contains all the types for the AP language *)
+open Config (* Contains types for the configuration language *)
 open Id (*For counting on IDs*)
 open Util
+
+exception Config_error of string
 
 (*Helper function if needed for debugging*)
 let val_to_string value =
@@ -775,7 +778,7 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         return_list := return_backup ;
          return
 
-let compile (Program(macros,network)) name =
+let compile (Program(macros,network)) config name =
     
         
     (* Add the macros to the symbol table *)
@@ -783,16 +786,25 @@ let compile (Program(macros,network)) name =
                     Hashtbl.add symbol_table name (MacroContainer(m))) macros
     ;
     match network with
-        | Network(params,(Block(b))) -> begin
+        | Network((Parameters(params)),(Block(b))) -> begin
+            (*Add params to symbol_table*)
+            List.iter (fun (Param(n,t)) ->
+                try
+                    let a_val = List.assoc n config in
+                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val))))
+                with Not_found ->
+                    raise (Config_error(Printf.sprintf "No configuration provided for variable \"%s\".\n" n))
+            ) params ;
             let seed = new_seed () in
-                List.iter (fun s ->
+                List.mapi (fun i s ->
+                    net := !(Automata.create (Printf.sprintf "%s_%d" name i) "") ;
                     let start_str = Printf.sprintf "start_%d" (get_num seed) in
                     let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
                     let _ = Automata.add_element net start in
-                    evaluate_statement s [start_str] "" ; () ) b
+                    evaluate_statement s [start_str] "" ; net ) b
                 end
-    ;
-    Automata.set_name net name ; net (*;
+    (*;
+    Automata.set_name net name ; net*) (*;
     let return = (Automata.network_to_str net) in
         Printf.printf "pong\n%!" ; return*)
 
