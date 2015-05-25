@@ -106,7 +106,8 @@ type value =
     | BooleanValue of bool
     | AutomataElement of Automata.element
     | ArrayValue of value option array
-    | AbstractValue of Config.size
+    | AbstractValue of Config.size * string
+    | AbstractChar of string
     
 type container =
     | MacroContainer of macro
@@ -119,6 +120,7 @@ type exp_return =
     | CharExp of char
     | StringExp of string
     | ArrayExp of value option array
+    | AbstractExp of Config.size * string * typ
 type symbol = (string, container) Hashtbl.t
 
 

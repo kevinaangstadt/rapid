@@ -18,8 +18,12 @@ let val_to_string value =
         | CharValue(c) -> Printf.sprintf "%c" c
         | BooleanValue(b) -> Printf.sprintf "%b" b
         | AutomataElement(_) -> "Automata"
+        | AbstractValue(_,s)
+        | AbstractChar(s) -> s
 
 let symbol_table : symbol = Hashtbl.create 255
+
+let abstract_mapping : (string,string) Hashtbl.t = Hashtbl.create 255
 
 let return_list = ref StringSet.empty
 
@@ -214,6 +218,28 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                 ) last a
+            | AbstractExp((range_list,abstract_typ),pre,t) ->
+                let n = match List.hd range_list with
+                    | SingleValue(n) -> n
+                    | _ -> raise (Config_error("Ranges not supported at this time!"))
+                in
+                let n_array = Array.init n (fun n -> n) in
+                Array.fold_left (fun new_last n ->
+                    let new_pre = Printf.sprintf "%s[%d]" pre n in
+                    begin
+                    match t with
+                        | String ->
+                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                        | Array(x) ->
+                            let (Config.ArrayInfo(new_size)) = abstract_typ in
+                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                    end ;
+                    let return = evaluate_statement f last label in
+                    (*remove binding*)
+                    Hashtbl.remove symbol_table name ; new_last @ return
+                                       
+                ) last n_array
+                
             (* TODO add some sort of array exp*)
             
             end
@@ -238,6 +264,27 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; return
                 ) last a
+            | AbstractExp((range_list,abstract_typ),pre,t) ->
+                let n = match List.hd range_list with
+                    | SingleValue(n) -> n
+                    | _ -> raise (Config_error("Ranges not supported at this time!"))
+                in
+                let n_array = Array.init n (fun n -> n) in
+                Array.fold_left (fun last n ->
+                    let new_pre = Printf.sprintf "%s[%d]" pre n in
+                    begin
+                    match t with
+                        | String ->
+                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                        | Array(x) ->
+                            let (Config.ArrayInfo(new_size)) = abstract_typ in
+                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                    end ;
+                    let return = evaluate_statement f last label in
+                    (*remove binding*)
+                    Hashtbl.remove symbol_table name ; return
+                                       
+                ) last n_array
             (* TODO add some sort of array exp*)
             end
         | VarDec(var) ->
@@ -327,10 +374,11 @@ and evaluate_expression (exp : expression) (before : Automata.element list optio
         | Automata -> AutomataExp(evaluate_expression_aut exp before s prefix seed)
         | Int -> IntExp(evaluate_int_expression exp)
         | Char -> CharExp(evaluate_char_expression exp)
-        | String -> StringExp(evaluate_string_expression exp)
-        | Array(_) -> ArrayExp(evaluate_array_expression exp)
+        | String -> evaluate_string_expression exp
+        | Array(_) -> evaluate_array_expression exp
 and evaluate_expression_aut (exp : expression) (before : Automata.element list option) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
+    let id = Printf.sprintf "%s_%d" prefix (get_num seed) in
     let get_value v =
         begin
         match v.exp with
@@ -341,6 +389,9 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 | NoOffset ->
                     begin match v with
                     | CharValue(s) -> s
+                    | AbstractChar(s) ->
+                        Hashtbl.add abstract_mapping id s ;
+                        'a'
                     end
         end in
     match exp.exp with
@@ -353,10 +404,10 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value b),Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value b),Automata.NotStart,false,[],false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Char.escaped (get_value a),Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value a),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -369,10 +420,10 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         [Automata.STE(id,set,strt,latch,cons@connect,report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value b)),Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Printf.sprintf "^%s" (Char.escaped (get_value b)),Automata.NotStart,false,[],false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE((Printf.sprintf "%s_%d" prefix (get_num seed)),Printf.sprintf "^%s" (Char.escaped (get_value a)),Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Printf.sprintf "^%s" (Char.escaped (get_value a)),Automata.NotStart,false,[],false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -503,20 +554,20 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in [Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), Automata.NotStart, false, connect, false)]
+                    in [Automata.STE(id,Printf.sprintf "[%s]" ((build_charset a)^(build_charset b)), Automata.NotStart, false, connect, false)]
                 else
                 let b_eval = evaluate_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset a)), Automata.NotStart, false, connect, false) :: b_eval
+                    in Automata.STE(id,Printf.sprintf "[%s]" ((build_charset a)), Automata.NotStart, false, connect, false) :: b_eval
             else
                 if can_condense b then
                 let a_eval = evaluate_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(Printf.sprintf "%s_%d" prefix (get_num seed),Printf.sprintf "[%s]" ((build_charset b)), Automata.NotStart, false, connect, false) :: a_eval
+                    in Automata.STE(id,Printf.sprintf "[%s]" ((build_charset b)), Automata.NotStart, false, connect, false) :: a_eval
                 else
                     let a_eval = evaluate_expression_aut a None s prefix seed in
                     let b_eval = evaluate_expression_aut b None s prefix seed in
@@ -697,17 +748,24 @@ and evaluate_char_expression exp =
 and evaluate_string_expression exp =
     match exp.exp with
         | Lval((a,o)) ->
-            let Variable(n,t,(Some (StringValue(s)))) = symbol_variable_lookup a in
-                s
+            let Variable(n,t,(Some v)) = symbol_variable_lookup a in
+                begin
+                match v with
+                    | StringValue(s) -> StringExp(s)
+                    | AbstractValue(s,pre) -> AbstractExp((s,pre,t))
+                end
         | Lit(a) -> begin match a with
-                      | StringLit(x,_) -> x
+                      | StringLit(x,_) -> StringExp(x)
                     end
 
+(*TODO Offsets*)
 and evaluate_array_expression exp =
     match exp.exp with
         | Lval((a,o)) ->
-            let Variable(n,t,(Some (ArrayValue(s)))) = symbol_variable_lookup a in
-                s
+            let Variable(n,t,(Some v)) = symbol_variable_lookup a in
+                match v with
+                    | ArrayValue(s) -> ArrayExp(s)
+                    | AbstractValue(s,pre) -> AbstractExp((s,pre,t))
                     
 and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
@@ -791,7 +849,7 @@ let compile (Program(macros,network)) config name =
             List.iter (fun (Param(n,t)) ->
                 try
                     let a_val = List.assoc n config in
-                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val))))
+                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val,n))))
                 with Not_found ->
                     raise (Config_error(Printf.sprintf "No configuration provided for variable \"%s\".\n" n))
             ) params ;
@@ -801,7 +859,28 @@ let compile (Program(macros,network)) config name =
                     let start_str = Printf.sprintf "start_%d" (get_num seed) in
                     let start = Automata.STE(start_str,"@", Automata.AllStart,false,[],false) in
                     let _ = Automata.add_element net start in
-                    evaluate_statement s [start_str] "" ; net ) b
+                    match s with
+                        | SomeStmt((Param(name,t)),source,f) ->
+                            begin
+                            let obj = evaluate_expression source None None "" (new_seed ()) in
+                            match obj with
+                            | AbstractExp((range_list,abstract_typ),pre,t) ->
+                                let new_pre = Printf.sprintf "%s[dynamic_array_index]" pre in
+                                begin
+                                match t with
+                                    | String ->
+                                        Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                                    | Array(x) ->
+                                        let (Config.ArrayInfo(new_size)) = abstract_typ in
+                                        Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                                end ;
+                                let return = evaluate_statement f [start_str] "" in
+                                (*remove binding*)
+                                Hashtbl.remove symbol_table name ; net
+                            | _ -> evaluate_statement s [start_str] "" ; net
+                            end
+                        | _ -> evaluate_statement s [start_str] "" ; net
+                    ) b
                 end
     (*;
     Automata.set_name net name ; net*) (*;
