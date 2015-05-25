@@ -81,15 +81,20 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
             let tb = ref StringSet.empty in
             let fb = ref StringSet.empty in
-            let rec flip_symbol ste =
+            let rec flip_symbol (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
-                let (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) = Automata.duplicate_element ste ("n_"^(Automata.get_id ste)) in
                 let connection_list : Automata.element_connections list = match connect with
                     | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect
                     | [] -> tb := StringSet.add id !tb ; [] in
-                let new_ste = Automata.make_ste id set (not neg) strt latch connection_list report in
+                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
+                begin try
+                let mapped = Hashtbl.find abstract_mapping id in
+                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                with Not_found -> ()
+                end
+                ;
                 new_ste
                 end in
             let rec add_conn (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
@@ -108,6 +113,12 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                     | [] -> [] in
                 let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
+                begin try
+                let mapped = Hashtbl.find abstract_mapping id in
+                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                with Not_found -> ()
+                end
+                ;
                 new_ste
                 end in
             let rec add_conn_neg (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
@@ -433,15 +444,20 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             begin
             let temp_net = Automata.create "tmp" "" in
             let states : (string,Automata.element) Hashtbl.t = Hashtbl.create 255 in
-            let rec flip_symbol ste =
+            let rec flip_symbol (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
-                let (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) = Automata.duplicate_element ste ("n_"^(Automata.get_id ste)) in
                 let connection_list : Automata.element_connections list = match connect with
                     | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect
                     | [] -> [] in
-                let new_ste = Automata.make_ste id set (not neg) strt latch connection_list report in
+                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
+                begin try
+                let mapped = Hashtbl.find abstract_mapping id in
+                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                with Not_found -> ()
+                end
+                ;
                 new_ste
                 end in
             let rec add_conn (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
@@ -460,14 +476,20 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     | [] -> [] in
                 let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
+                begin try
+                let mapped = Hashtbl.find abstract_mapping id in
+                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                with Not_found -> ()
+                end
+                ;
                 new_ste
                 end in
             let rec add_conn_neg (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
                 match connect with
                     | hd :: tl -> List.iter (fun (a,con) ->
-                        Automata.connect net id ("n"^(Automata.get_id a)) None ;
-                        Automata.connect net ("n"^id) (Automata.get_id a) None ;
+                        Automata.connect temp_net id ("n"^(Automata.get_id a)) None ;
+                        Automata.connect temp_net ("n"^id) (Automata.get_id a) None ;
                         (add_conn_neg a)
                         ) connect
                     | [] -> ()
@@ -852,7 +874,7 @@ let compile (Program(macros,network)) config name =
                     raise (Config_error(Printf.sprintf "No configuration provided for variable \"%s\".\n" n))
             ) params ;
             let seed = new_seed () in
-                List.mapi (fun i s ->
+            let return = List.mapi (fun i s ->
                     net := !(Automata.create (Printf.sprintf "%s_%d" name i) "") ;
                     let start_str = Printf.sprintf "start_%d" (get_num seed) in
                     let start = Automata.STE(start_str,"@",false, Automata.AllStart,false,[],false) in
@@ -878,8 +900,12 @@ let compile (Program(macros,network)) config name =
                             | _ -> evaluate_statement s [start_str] "" ; net
                             end
                         | _ -> evaluate_statement s [start_str] "" ; net
-                    ) b
+                    ) b in
+                Hashtbl.iter (fun k v ->
+                    Printf.printf "%s -> %s\n" k v
+                ) abstract_mapping ; return
                 end
+            
     (*;
     Automata.set_name net name ; net*) (*;
     let return = (Automata.network_to_str net) in

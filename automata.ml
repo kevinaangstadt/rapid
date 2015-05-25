@@ -70,15 +70,6 @@ let set_name (net:network ref) name = net := {!net with id=name;}
 
 let make_ste id set neg strt latch connect report =
     STE(id,set,neg,strt,latch,connect,report)
-
-let duplicate_element e name =
-    match e with
-        | STE(_,set,neg,strt,latch,connect,report) ->
-            STE(name,set,neg,strt,latch,connect,report)
-        | Counter(_,target,at_target,report,connect) ->
-            Counter(name,target,at_target,report,connect) 
-        | Combinatorial(typ,_,eod,report,connect) ->
-            Combinatorial(typ,name,eod,report,connect)
     
 let get_id e =
     match e with
@@ -297,7 +288,7 @@ let element_to_str e =
     in match e with
         | STE(id,set,neg,strt,latch,connect,report) -> begin
             let set_to_str set =
-                if neg then "[" ^ set ^ "@$\\x26]"
+                if neg then "[^" ^ set ^ "@$\\x26]"
                 else "[" ^ set ^ "]"
             in
             let rep_line =
