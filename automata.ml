@@ -25,8 +25,8 @@ type combinatorial =
     | NPOS
 
 type element =
-    | STE of string * string * start * bool * element_connections list * bool
-        (* id, symbol set, start, latch, activate on match, report on match *)
+    | STE of string * string * bool * start * bool * element_connections list * bool
+        (* id, symbol set, negate, start, latch, activate on match, report on match *)
     | Counter of string * int * at_target * bool * element_connections list
         (* id, target, at_target, report on target, activate on target *)
     | Combinatorial of combinatorial * string * bool * bool * element_connections list
@@ -68,18 +68,27 @@ let create name desc = ref {
 
 let set_name (net:network ref) name = net := {!net with id=name;}
 
-let make_ste id set strt latch connect report =
-    STE(id,set,strt,latch,connect,report)
+let make_ste id set neg strt latch connect report =
+    STE(id,set,neg,strt,latch,connect,report)
+
+let duplicate_element e name =
+    match e with
+        | STE(_,set,neg,strt,latch,connect,report) ->
+            STE(name,set,neg,strt,latch,connect,report)
+        | Counter(_,target,at_target,report,connect) ->
+            Counter(name,target,at_target,report,connect) 
+        | Combinatorial(typ,_,eod,report,connect) ->
+            Combinatorial(typ,name,eod,report,connect)
     
 let get_id e =
     match e with
-        | STE(id,_,_,_,_,_)
+        | STE(id,_,_,_,_,_,_)
         | Counter(id,_,_,_,_)
         | Combinatorial(_,id,_,_,_) -> id
 
 let get_connections e =
     match e with
-        | STE(_,_,_,_,connect,_)
+        | STE(_,_,_,_,_,connect,_)
         | Counter(_,_,_,_,connect)
         | Combinatorial(_,_,_,_,connect) -> connect
 
@@ -106,7 +115,7 @@ let start = match start with
     else
         raise Duplicate_ID
 end in match e with
-    | STE(id,set,strt,latch,connect,report) -> add_helper net id e strt report
+    | STE(id,set,neg,strt,latch,connect,report) -> add_helper net id e strt report
     | Counter(id,target,behavior,report,connect) -> add_helper net id e NotStart report
     | Combinatorial(_,id,eod,report,connect) -> add_helper net id e NotStart report
 
@@ -125,8 +134,8 @@ let e2_conn : element_connections = begin match terminal with
     | Some x -> (e2,Some x)
     end in
     match e1 with
-        | STE(id,set,strt,latch,connect,report) ->
-            Hashtbl.replace (!net).states e1_id (STE(id,set,strt,latch,e2_conn::connect,report))
+        | STE(id,set,neg,strt,latch,connect,report) ->
+            Hashtbl.replace (!net).states e1_id (STE(id,set,neg,strt,latch,e2_conn::connect,report))
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace (!net).states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
         | Combinatorial(typ,id,eod,report,connect) ->
@@ -157,8 +166,8 @@ let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
     end in begin
     match e with 
-        | STE(id,set,strt,latch,connect,report) ->
-            Hashtbl.replace (!net).states e_id (STE(id,set,strt,latch,connect,r))
+        | STE(id,set,neg,strt,latch,connect,report) ->
+            Hashtbl.replace (!net).states e_id (STE(id,set,neg,strt,latch,connect,r))
         | Counter(id,target,behavior,report,connect) ->
             Hashtbl.replace (!net).states e_id (Counter(id,target,behavior,r,connect))
         | Combinatorial(typ,id,eod,report,connect) ->
@@ -178,6 +187,7 @@ let m_create id input output = {
     output = [];
 }
 
+(* We do not currently use macros, so this code is outdated.
 let m_add_element macro e =
     match e with
         | STE(id,_,_,_,_,_)
@@ -241,7 +251,7 @@ let e = begin try Hashtbl.find macro.states e_id
             Hashtbl.replace macro.states e_id (Combinatorial(typ,id,eod,r,connect))
     end ;
     macro
-
+*)
 (*Output Functions*)  
 let element_to_str e =
     let behavior_to_str behavior =
@@ -258,7 +268,7 @@ let element_to_str e =
         let term = match c with
             | None -> begin
                 match e with
-                    | STE(_,_,_,_,_,_) -> ""
+                    | STE(_,_,_,_,_,_,_) -> ""
                     | Combinatorial(typ,_,_,_,_) ->
                         begin
                         match typ with
@@ -273,7 +283,7 @@ let element_to_str e =
                 end 
             | Some x -> x in
         match e with (*TODO Add lots of error-checking here*)
-            | STE(id,set,strt,latch,connect,report) -> id
+            | STE(id,set,neg,strt,latch,connect,report) -> id
             | Counter(id,target,behavior,report,connect) -> id ^ ":" ^ term
             | Combinatorial(typ,id,_,_,_) ->
                 match typ with
@@ -285,11 +295,10 @@ let element_to_str e =
                     | _ -> id ^ ":" ^ term
         
     in match e with
-        | STE(id,set,strt,latch,connect,report) -> begin
+        | STE(id,set,neg,strt,latch,connect,report) -> begin
             let set_to_str set =
-                if (set.[0] = '^') then "[" ^ set ^ "@$\\x26]"
-                else if (set.[0] = '\\') then "[" ^ set ^ "]"
-                else set
+                if neg then "[" ^ set ^ "@$\\x26]"
+                else "[" ^ set ^ "]"
             in
             let rep_line =
                 if report then "<report-on-match/>\n" else "" in
@@ -343,7 +352,7 @@ let network_to_file (net:network ref) (channel:out_channel) =
 let rec print_rec (e:element) =
     let _ = print_endline (element_to_str e) in
     match e with
-        | STE(_,_,_,_,connect,_)
+        | STE(_,_,_,_,_,connect,_)
         | Counter(_,_,_,_,connect)
         | Combinatorial(_,_,_,_,connect) -> List.iter (fun (a,c) -> print_rec a) connect
 (*
