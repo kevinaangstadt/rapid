@@ -21,6 +21,8 @@ let val_to_string value =
         | AbstractValue(_,s)
         | AbstractChar(s) -> s
 
+let do_tiling = ref false
+
 let symbol_table : symbol = Hashtbl.create 255
 
 let abstract_mapping : (string,string) Hashtbl.t = Hashtbl.create 255
@@ -235,7 +237,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                 in
                 let n_array = Array.init n (fun n -> n) in
                 Array.fold_left (fun new_last n ->
-                    let new_pre = Printf.sprintf "%s[%d]" pre n in
+                    let new_pre = Printf.sprintf "%s_%d_" pre n in
                     begin
                     match t with
                         | String ->
@@ -401,7 +403,7 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     | CharValue(s) -> s
                     | AbstractChar(s) ->
                         Hashtbl.add abstract_mapping id s ;
-                        'a'
+                        Char.chr ((Random.int 26) + 97)
                     end
         end in
     match exp.exp with
@@ -885,18 +887,35 @@ let compile (Program(macros,network)) config name =
                             let obj = evaluate_expression source None None "" (new_seed ()) in
                             match obj with
                             | AbstractExp((range_list,abstract_typ),pre,t) ->
-                                let new_pre = Printf.sprintf "%s[dynamic_array_index]" pre in
-                                begin
-                                match t with
-                                    | String ->
-                                        Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
-                                    | Array(x) ->
-                                        let (Config.ArrayInfo(new_size)) = abstract_typ in
-                                        Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
-                                end ;
-                                let return = evaluate_statement f [start_str] "" in
-                                (*remove binding*)
-                                Hashtbl.remove symbol_table name ; net
+                                let add_to_net n =
+                                    begin
+                                    let new_pre = Printf.sprintf "%s[dynamic_array_index+%d]" pre n in
+                                    begin
+                                    match t with
+                                        | String ->
+                                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                                        | Array(x) ->
+                                            let (Config.ArrayInfo(new_size)) = abstract_typ in
+                                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                                    end ;
+                                    let return = evaluate_statement f [start_str] "" in
+                                    (*remove binding*)
+                                    Hashtbl.remove symbol_table name
+                                    end
+                                in
+                                let rec tiling_optimizer num_blocks n =
+                                    let net_back = Automata.clone net in
+                                    add_to_net n ;
+                                    if (Opt.get_blocks net) > num_blocks then
+                                        net_back
+                                    else
+                                        tiling_optimizer num_blocks (n+1);
+                                in
+                                add_to_net 0 ;
+                                if !do_tiling then
+                                    tiling_optimizer (Opt.get_blocks net) 1
+                                else
+                                    net
                             | _ -> evaluate_statement s [start_str] "" ; net
                             end
                         | _ -> evaluate_statement s [start_str] "" ; net

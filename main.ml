@@ -65,7 +65,8 @@ let set_config new_c = config := new_c in
 
 let argspec = [
         ("-o", Arg.String (set_out), "Names output file; a.anml by default" );
-        ("-i", Arg.String (set_config), "Provides variable configuration for network")
+        ("-i", Arg.String (set_config), "Provides variable configuration for network");
+        ("--tiling", Arg.Set Compiler.do_tiling, "Enable tiling optimization")
     ] in
 let argspec = Arg.align argspec in
     Arg.parse argspec (fun x -> file := x) "Usage: language [options] [input file]" ;

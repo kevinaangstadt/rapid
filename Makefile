@@ -23,6 +23,7 @@ LANG_OBJS = \
 	intermediate.cmx \
 	tc.cmx \
 	id.cmx \
+    opt.cmx \
 	compiler.cmx \
 	parse.cmx \
 	lex.cmx \
@@ -45,10 +46,10 @@ clean:
 	$(OCAMLLEX) $<
 	
 language: $(LANG_OBJS) main.cmx
-	$(OCAMLOPT)  -o language str.cmxa $(LANG_OBJS) main.cmx
+	$(OCAMLOPT)  -o language unix.cmxa str.cmxa $(LANG_OBJS) main.cmx
 	
 simulator: $(LANG_OBJS) simulate.cmx
-	$(OCAMLOPT)  -o rapidsim str.cmxa $(LANG_OBJS) simulate.cmx
+	$(OCAMLOPT)  -o rapidsim unix.cmxa str.cmxa $(LANG_OBJS) simulate.cmx
 
 config_parse.cmx: config_parse.cmi config_parse.ml
 parse.cmx: parse.cmi parse.ml

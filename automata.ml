@@ -66,6 +66,8 @@ let create name desc = ref {
     description = desc;
 }
 
+let clone (net:network ref) = ref {!net with states = Hashtbl.copy (!net).states }
+
 let set_name (net:network ref) name = net := {!net with id=name;}
 
 let make_ste id set neg strt latch connect report =
@@ -335,6 +337,7 @@ let network_to_str (net:network ref) =
     "</automata-network>"
 
 let network_to_file (net:network ref) (channel:out_channel) =
+    Printf.printf "Automaton size: %d\n%!" (Hashtbl.length (!net).states);
     Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
     Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description ;
     Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
