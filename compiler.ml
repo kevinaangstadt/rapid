@@ -833,7 +833,12 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
             | Some(v) -> v
             | _ -> StringValue("")
         in
-        s := Printf.sprintf "%s_%s" !s (val_to_string v) ; 
+        s := Printf.sprintf "%s_%s" !s (String.map (fun c ->
+            match c with
+                | '['
+                | ']' -> '_'
+                | _ -> c
+        ) (val_to_string v)) ; 
         Hashtbl.add symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
