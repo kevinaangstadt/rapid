@@ -5,7 +5,7 @@ output=""
 for i in "${array[@]}"; do   # The quotes are necessary here
     echo "=========== $i ============="
     rapidsim="$(./rapidsim -input test/$i.txt test/$i.ap)"
-    batchsim="$(./language test/$i.ap && python ./test/batchSim.py -a a.anml -s test/$i.txt)"
+    batchsim="$(./language test/$i.ap && python ./test/batchSim.py -a 0.a.anml -s test/$i.txt)"
     echo "RAPIDSIM"
     echo "$rapidsim"
     echo "BATCHSIM"
@@ -14,4 +14,4 @@ for i in "${array[@]}"; do   # The quotes are necessary here
     echo "============================"
 done
 echo -e "$output"
-rm a.anml
+rm 0.a.anml
