@@ -836,7 +836,8 @@ and evaluate_macro (Macro(name,Parameters(params),stmt)) (args:expression list) 
         s := Printf.sprintf "%s_%s" !s (String.map (fun c ->
             match c with
                 | '['
-                | ']' -> '_'
+                | ']'
+                | '+' -> '_'
                 | _ -> c
         ) (val_to_string v)) ; 
         Hashtbl.add symbol_table p (Variable(p,t,value))
@@ -911,14 +912,19 @@ let compile (Program(macros,network)) config name =
                                 let rec tiling_optimizer num_blocks n =
                                     let net_back = Automata.clone net in
                                     add_to_net n ;
-                                    if (Opt.get_blocks net) > num_blocks then
+                                    let new_blocks = Opt.get_blocks net in
+                                    Printf.printf "Number of blocks needed now: %d\n" new_blocks;
+                                    if new_blocks > num_blocks then
+                                        
                                         net_back
                                     else
                                         tiling_optimizer num_blocks (n+1);
                                 in
                                 add_to_net 0 ;
                                 if !do_tiling then
-                                    tiling_optimizer (Opt.get_blocks net) 1
+                                    let num_blocks = Opt.get_blocks net in
+                                    Printf.printf "Number of initial blocks: %d\n" num_blocks;
+                                    tiling_optimizer (num_blocks) 1
                                 else
                                     net
                             | _ -> evaluate_statement s [start_str] "" ; net
