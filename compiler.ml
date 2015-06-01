@@ -25,7 +25,7 @@ let do_tiling = ref false
 
 let symbol_table : symbol = Hashtbl.create 255
 
-let abstract_mapping : (string,string) Hashtbl.t = Hashtbl.create 255
+let abstract_mapping : ((string,string) Hashtbl.t) ref = ref (Hashtbl.create 255)
 
 let return_list = ref StringSet.empty
 
@@ -92,8 +92,8 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                 let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
                 begin try
-                let mapped = Hashtbl.find abstract_mapping id in
-                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                let mapped = Hashtbl.find !abstract_mapping id in
+                    Hashtbl.add !abstract_mapping ("n_"^id) mapped
                 with Not_found -> ()
                 end
                 ;
@@ -116,8 +116,8 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                 let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
                 begin try
-                let mapped = Hashtbl.find abstract_mapping id in
-                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                let mapped = Hashtbl.find !abstract_mapping id in
+                    Hashtbl.add !abstract_mapping ("n_"^id) mapped
                 with Not_found -> ()
                 end
                 ;
@@ -402,7 +402,7 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     begin match v with
                     | CharValue(s) -> s
                     | AbstractChar(s) ->
-                        Hashtbl.add abstract_mapping id s ;
+                        Hashtbl.add !abstract_mapping id s ;
                         Char.chr ((Random.int 26) + 97)
                     end
         end in
@@ -455,8 +455,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
                 begin try
-                let mapped = Hashtbl.find abstract_mapping id in
-                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                let mapped = Hashtbl.find !abstract_mapping id in
+                    Hashtbl.add !abstract_mapping ("n_"^id) mapped
                 with Not_found -> ()
                 end
                 ;
@@ -479,8 +479,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
                 begin try
-                let mapped = Hashtbl.find abstract_mapping id in
-                    Hashtbl.add abstract_mapping ("n_"^id) mapped
+                let mapped = Hashtbl.find !abstract_mapping id in
+                    Hashtbl.add !abstract_mapping ("n_"^id) mapped
                 with Not_found -> ()
                 end
                 ;
@@ -911,12 +911,15 @@ let compile (Program(macros,network)) config name =
                                 in
                                 let rec tiling_optimizer num_blocks n =
                                     let net_back = Automata.clone net in
+                                    let mapping_back = Hashtbl.copy !abstract_mapping in
                                     add_to_net n ;
                                     let new_blocks = Opt.get_blocks net in
                                     Printf.printf "Number of blocks needed now: %d\n" new_blocks;
                                     if new_blocks > num_blocks then
-                                        
+                                        begin
+                                        abstract_mapping := mapping_back ;
                                         net_back
+                                        end
                                     else
                                         tiling_optimizer num_blocks (n+1);
                                 in
@@ -933,7 +936,7 @@ let compile (Program(macros,network)) config name =
                     ) b in
                 Hashtbl.iter (fun k v ->
                     Printf.printf "%s -> %s\n" k v
-                ) abstract_mapping ; return
+                ) !abstract_mapping ; return
                 end
             
     (*;
