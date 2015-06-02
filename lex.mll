@@ -59,6 +59,7 @@ rule initial = parse
     
     | "foreach" { TFOREACH(where lexbuf) }
     | "while"   { TWHILE(where lexbuf) }
+    | "whenever"{ TWHENEVER(where lexbuf) }
     | "if"      { TIF(where lexbuf) }
     | "else"    { TELSE(where lexbuf) }
     | "either"  { TEITHER(where lexbuf) }

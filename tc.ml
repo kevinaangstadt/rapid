@@ -213,11 +213,17 @@ let check (Program(macros,network) as p) : program =
                 let _ = List.fold_left (fun gamma_prime s -> check_statement s gamma_prime) gamma stmts in
                 gamma
             | If(exp,s1,_)
-            | While(exp,s1) ->
+            | While(exp,s1)
+            | Whenever(exp,s1)->
                 let exp_t = check_exp exp gamma in
                 let s1_t = check_statement s1 exp_t  in
                 begin match stmt with
-                    | If(_,_,s2) -> check_statement s2 s1_t 
+                    | If(_,_,s2) -> check_statement s2 s1_t
+                    | Whenever(_,_) ->
+                        (*EXP can only be Automata*)
+                        match exp.expr_type with
+                            | Automata -> s1_t
+                            | _ -> raise (Type_error "Whenever statements can only have Automata expressions")
                     | _ -> s1_t
                 end
             | Either(stmts) ->

@@ -59,6 +59,7 @@
 %token	<Util.loc>        TNOT
 %token	<Util.loc>        TFOREACH
 %token	<Util.loc>        TWHILE
+%token  <Util.loc>        TWHENEVER
 %token	<Util.loc>        TIF
 %token	<Util.loc>        TELSE
 %token  <Util.loc>        TEITHER
@@ -163,6 +164,7 @@ statement:
     | allof_statement { Allof($1) }
     | foreach_statement { $1 }
     | while_statement { $1 }
+    | whenever_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report }
     | declaration TSEMICOLON { $1 }
@@ -229,12 +231,12 @@ orelse_list:
 ;
 
 allof_statement:
-    | TEITHER block andalso_list { $2 :: $3 }
+    | TALLOF block andalso_list { $2 :: $3 }
 ;
 
 andalso_list:
     | /* empty */ { [] }
-    | TORELSE block andalso_list { $2 :: $3 }
+    | TANDALSO block andalso_list { $2 :: $3 }
 ;
 
 if_statement:
@@ -252,6 +254,10 @@ foreach_statement:
 
 while_statement:
       TWHILE TLPAREN expression TRPAREN statement { While($3,$5) }
+;
+
+whenever_statement:
+      TWHENEVER TLPAREN expression TRPAREN statement { Whenever($3,$5) }
 ;
 
 expression_statement:

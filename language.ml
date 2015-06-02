@@ -81,6 +81,7 @@ type statement =
     | Allof of statement list
     | ForEach of param * expression * statement
     | While of expression * statement
+    | Whenever of expression * statement
     | VarDec of (string * typ * initialize option) list
     | Assign of lval * expression
     | ExpStmt of expression 
@@ -179,6 +180,7 @@ and statement_to_str (a : statement) = match a with
         end
     | If(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
     | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
+    | Whenever(exp,t) -> sprintf "whenever( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
     | VarDec(var) -> List.fold_left (fun prev (s,t,i) ->
                                     let new_var = match i with

@@ -72,6 +72,15 @@ let rec add_all net (e:Automata.element) =
         Automata.add_element net e ;
         List.iter (fun (a,c) -> add_all net a) connect
 
+let rec find_last elements =
+    if List.for_all (fun e -> (Automata.get_connections e) = []) elements then
+        elements
+    else
+        let new_es = List.fold_left (fun list e ->
+            (List.map (fun (c,_) -> c) (Automata.get_connections e)) @ list
+        ) [] elements in
+        find_last new_es
+
 let rec evaluate_statement (stmt : statement) (last : string list) (label : string) : string list =
     match stmt with
         | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; last
@@ -202,6 +211,17 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
                 if b then evaluate_statement then_clause last label
                 else evaluate_statement else_clause last label
             end
+        | Whenever(exp,stmt) ->
+            let id = Printf.sprintf "%s_if_%d" label (get_num if_seed) in
+            let (AutomataExp(e_list)) = evaluate_expression exp (Some (List.map (fun l -> Automata.get_element net l) last)) None id (new_seed ()) in
+            let end_of_exp = find_last e_list in
+            let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
+            Automata.add_element net spin ;
+            List.iter (fun e ->
+                add_all net e ;
+                Automata.connect net (Automata.get_id spin) (Automata.get_id e) None
+            ) e_list ;
+            evaluate_statement stmt (List.map Automata.get_id end_of_exp) label
         | Either(statement_blocks) ->
             begin
             List.fold_left( fun complete stmt ->
@@ -351,15 +371,7 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
             begin
             match e.expr_type with
                 | Automata ->
-                    let rec find_last elements =
-                        if List.for_all (fun e -> (Automata.get_connections e) = []) elements then
-                            elements
-                        else
-                            let new_es = List.fold_left (fun list e ->
-                                (List.map (fun (c,_) -> c) (Automata.get_connections e)) @ list
-                            ) [] elements in
-                            find_last new_es
-                    in
+                    
                     let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "%s_exp_%d" label (get_num e_seed)) (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
