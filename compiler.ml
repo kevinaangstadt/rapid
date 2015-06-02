@@ -213,14 +213,23 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
             end
         | Whenever(exp,stmt) ->
             let id = Printf.sprintf "%s_if_%d" label (get_num if_seed) in
-            let (AutomataExp(e_list)) = evaluate_expression exp (Some (List.map (fun l -> Automata.get_element net l) last)) None id (new_seed ()) in
+            let (AutomataExp(e_list)) = evaluate_expression exp None None id (new_seed ()) in
             let end_of_exp = find_last e_list in
             let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
             Automata.add_element net spin ;
             List.iter (fun e ->
                 add_all net e ;
+                (*Add connections from the spin guard to the exp guard*)
                 Automata.connect net (Automata.get_id spin) (Automata.get_id e) None
             ) e_list ;
+            List.iter (fun id2 ->
+                (*Add connect from last to the spin guard*)
+                Automata.connect net id2 (Automata.get_id spin) None ;
+                (*Add all of the connections from last to the exp guard*)
+                List.iter (fun e ->
+                    Automata.connect net id2 (Automata.get_id e) None
+                ) e_list;
+            ) last ;
             evaluate_statement stmt (List.map Automata.get_id end_of_exp) label
         | Either(statement_blocks) ->
             begin

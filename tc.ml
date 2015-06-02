@@ -220,10 +220,12 @@ let check (Program(macros,network) as p) : program =
                 begin match stmt with
                     | If(_,_,s2) -> check_statement s2 s1_t
                     | Whenever(_,_) ->
+                        begin
                         (*EXP can only be Automata*)
                         match exp.expr_type with
                             | Automata -> s1_t
                             | _ -> raise (Type_error "Whenever statements can only have Automata expressions")
+                        end
                     | _ -> s1_t
                 end
             | Either(stmts) ->
