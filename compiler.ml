@@ -217,6 +217,8 @@ let rec evaluate_statement (stmt : statement) (last : string list) (label : stri
             let end_of_exp = find_last e_list in
             let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
             Automata.add_element net spin ;
+            (*Connect spin to itself...so that it spins!*)
+            Automata.connect net (Automata.get_id spin) (Automata.get_id spin) None ;
             List.iter (fun e ->
                 add_all net e ;
                 (*Add connections from the spin guard to the exp guard*)
