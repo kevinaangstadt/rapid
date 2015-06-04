@@ -217,6 +217,8 @@ and exp_to_str exp = match exp.exp with
                         | CharLit(x,typ)   -> sprintf "'%c'" x
                         | True             -> "true"
                         | False            -> "false"
+                        | StartIn          -> "START_OF_INPUT"
+                        | AllIn            -> "ALL_INPUT"
                         end
     | Fun(a,b,c)    -> sprintf "%s.%s(%s)" (lval_to_str a) b (args_to_str c)
     | Input         -> "input()"

@@ -1,5 +1,9 @@
 let file = ref ""
 
+let intermediate = ref ""
+
+let set_intermediate name = intermediate := name 
+
 let process (lexbuf : Lexing.lexbuf) config =
     (*try*)
         let program = Parse.program Lex.initial lexbuf in
@@ -15,10 +19,16 @@ let process (lexbuf : Lexing.lexbuf) config =
             in
                 String.map (fun c -> if c = '.' then '_' else c) trim_front
         in
-            (*print_endline (Language.program_to_str program_i) ;*)
-            Compiler.compile program_i config net_name
-            
-            (*print_endline (Language.program_to_str program) ; *)  (**)
+            if !intermediate = "" then
+                (*print_endline (Language.program_to_str program_i) ;*)
+                Compiler.compile program_i config net_name
+                
+                (*print_endline (Language.program_to_str program) ; *)  (**)
+            else
+                let channel = open_out (Printf.sprintf "%s" !intermediate) in
+                Printf.fprintf channel "%s" (Language.program_to_str program_i) ;
+                close_out channel ;
+                exit(0);;
     (*with exn ->
       begin
         let curr = lexbuf.Lexing.lex_curr_p in
@@ -65,7 +75,8 @@ let set_config new_c = config := new_c in
 
 let argspec = [
         ("-o", Arg.String (set_out), "Names output file; a.anml by default" );
-        ("-i", Arg.String (set_config), "Provides variable configuration for network");
+        ("-c", Arg.String (set_config), "Provides variable configuration for network");
+        ("-i", Arg.String (set_intermediate), "Write intermediate RAPID to filename");
         ("--tiling", Arg.Set Compiler.do_tiling, "Enable tiling optimization")
     ] in
 let argspec = Arg.align argspec in
