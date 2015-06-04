@@ -36,6 +36,8 @@ rule initial = parse
     | "report"  { TREPORT(where lexbuf) }
     | "filter"  { TFILTER(where lexbuf) }
     | "input"   { TINPUT(where lexbuf) }
+    | "START_OF_INPUT" { TSTARTIN(where lexbuf) }
+    | "ALL_INPUT"      { TALLIN(where lexbuf) }
     
     | "="       { TASSIGN(where lexbuf) }
     | '-'       { TMINUS(where lexbuf) }

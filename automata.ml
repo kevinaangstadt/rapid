@@ -3,6 +3,10 @@
  * Represents a Micron Automaton
  *)
  
+let all_in = '*'
+
+let start_in = '@'
+ 
 type start =
     | NotStart
     | Start
@@ -56,6 +60,7 @@ type macro = {
 exception Duplicate_ID
 exception Element_not_found of string
 exception Malformed_connection
+exception Malformed_start
 
 let create name desc = ref {
     states = Hashtbl.create 1000000;
@@ -154,6 +159,24 @@ let e = begin try Hashtbl.find (!net).states e_id
         | _ -> raise (Element_not_found e_id)
     end
 
+let is_start_empty (net:network ref) =
+    (!net).start = []
+
+let set_start (net:network ref) e_id strt =
+let e = begin try Hashtbl.find (!net).states e_id
+    with Not_found -> raise (Element_not_found e_id)
+    end in begin
+    match e with
+        | STE(id,set,neg,old_strt,latch,connect,report) ->
+            Hashtbl.replace (!net).states e_id (STE(id,set,neg,strt,latch,connect,report))
+        | _ -> raise Malformed_start
+    end ;
+    net := {!net with start = (List.filter (fun (a,b) ->
+        match strt with
+            | NotStart -> a <> e_id
+            | _ -> true
+        ) ((e_id,e)::(!net).start))}
+
 let set_report (net:network ref) e_id r =
 let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
@@ -166,7 +189,7 @@ let e = begin try Hashtbl.find (!net).states e_id
         | Combinatorial(typ,id,eod,report,connect) ->
             Hashtbl.replace (!net).states e_id (Combinatorial(typ,id,eod,r,connect))
     end ;
-    net := {!net with report = (List.filter (fun (a,b) -> a <> e_id) (!net).report)}
+    net := {!net with report = (List.filter (fun (a,b) -> a <> e_id) ((e_id,e)::(!net).report))}
     
 (*Operations on Macros*)
 let m_create id input output = {

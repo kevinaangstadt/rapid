@@ -42,6 +42,8 @@
 %token	<Util.loc>        TREPORT
 %token	<Util.loc>        TFILTER
 %token  <Util.loc>        TINPUT
+%token  <Util.loc>        TSTARTIN
+%token  <Util.loc>        TALLIN
 %token  <Util.loc>        TMINUS
 %token  <Util.loc>        TPLUS
 %token  <Util.loc>        TTIMES
@@ -348,4 +350,6 @@ literal:
     }
     | TRUE { True,$1 }
     | FALSE { False,$1 }
+    | TALLIN { AllIn,$1 }
+    | TSTARTIN { StartIn,$1 }
 ;

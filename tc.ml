@@ -160,6 +160,7 @@ let check (Program(macros,network) as p) : program =
                     | IntLit(_,t)
                     | CharLit(_,t) -> t
                     | True | False -> Boolean
+                    | AllIn | StartIn -> Char
                 in exp.expr_type <- typ ; gamma
             (* TODO handle checking arguments at some point *)
             | Fun(a,b,c) ->

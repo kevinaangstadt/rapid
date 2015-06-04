@@ -27,6 +27,8 @@ type literal =
     | CharLit of char * typ
     | True
     | False
+    | StartIn
+    | AllIn
 
 type expression = {
     exp : expression_kind ;
