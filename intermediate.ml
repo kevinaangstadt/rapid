@@ -81,15 +81,19 @@ let rec resolve_exp exp =
 
 let rec resolve_exp_stmt stmt =
     match stmt with
+        | Allof(stmts) -> Allof(List.map resolve_exp_stmt stmts)
         | Block(stmts) -> Block(List.map resolve_exp_stmt stmts)
         | Either(stmts) -> Either(List.map resolve_exp_stmt stmts)
+        | SomeStmt(p,e,s1) -> SomeStmt(p,resolve_exp e,(resolve_exp_stmt s1))
         | ForEach(p,e,s1) -> ForEach(p,resolve_exp e,(resolve_exp_stmt s1))
+        | Whenever(e,s1) -> Whenever(resolve_exp e,(resolve_exp_stmt s1))
         | While(e,s1) -> While(resolve_exp e,(resolve_exp_stmt s1))
         | ExpStmt(e) -> ExpStmt(resolve_exp e)
         | _ -> stmt
 
 let rec resolve_if_stmt stmt =
     match stmt with
+        | Allof(stmts) -> Allof(List.map resolve_if_stmt stmts)
         | Block(stmts) -> Block(List.map resolve_if_stmt stmts)
         | If(e,s1,s2) ->
             begin
@@ -108,10 +112,13 @@ let rec resolve_if_stmt stmt =
                 ])
             end
         | Either(stmts) -> Either(List.map resolve_if_stmt stmts)
+        | SomeStmt(p,e,s1) -> SomeStmt(p,e,(resolve_if_stmt s1))
         | ForEach(p,e,s1) -> ForEach(p,e,(resolve_if_stmt s1))
+        | Whenever(e,s1) -> Whenever(e,(resolve_if_stmt s1))
         | While(e,s1) -> While(e,(resolve_if_stmt s1))
         | _ -> stmt
 
+(*TODO Not Currently used.  Possibly remove. Otherwise fix to cover all stmt types*)
 let rec resolve_while_stmt stmt =
     match stmt with
         | Block(stmts) -> Block(List.map resolve_while_stmt stmts)
@@ -142,8 +149,56 @@ let resolve (Program(macros,(Network(p,stmt)))) f =
     let net' = Network(p,(f stmt)) in
         Program(macros',net')
 
+(*TODO text_exp does not capture all possible ways whenever could be embedded*)
+let implicit_whenever (Program(macros,(Network(p,stmt))) as prog) =
+    let rec test_exp e =
+        match e.exp with
+            | EQ(e1,e2)
+            | NEQ(e1,e2) when ((e1.exp = Input && (e2.exp = Lit(AllIn) || e2.exp = Lit(StartIn))) ||
+                             (e2.exp = Input && (e1.exp = Lit(AllIn) || e1.exp = Lit(StartIn)))) ->
+                true
+            | Not(e) -> test_exp e
+            | Or(e1,e2)
+            | PAnd(e1,e2)
+            | And(e1,e2) -> (test_exp e1) || (test_exp e2)
+            | _ -> false
+    in    
+    let rec exists_whenever stmt =
+        match stmt with
+            | Either(stmts)
+            | Allof(stmts)
+            | Block(stmts) -> List.exists exists_whenever stmts
+            | If(_,s1,s2) -> (exists_whenever s1) || (exists_whenever s2)
+            | SomeStmt(_,_,s)
+            | ForEach(_,_,s)
+            | While(_,s)-> exists_whenever s
+            | Whenever(e,s) -> (test_exp e) || exists_whenever s
+            | _ -> false
+    in
+    let find_macro = List.exists (fun (Macro(s,p,stmt)) ->
+        exists_whenever stmt
+    ) macros in
+    if find_macro || (exists_whenever stmt) then
+        prog
+    else
+        let implicit_exp = {
+            exp = EQ({exp=Lit(StartIn);expr_type=Automata;loc=(0,0)}, {exp=Input;expr_type=Automata;loc=(0,0)});
+            expr_type = Automata;
+            loc = (0,0)
+        } in
+        let new_block =match stmt with
+            | Block(s_list) -> Block(List.map (fun s ->
+                match s with
+                    | SomeStmt(e,p,s1) -> SomeStmt(e,p,Whenever(implicit_exp,s1)) 
+                    | _ -> Whenever(implicit_exp,s)) s_list)
+            | _ -> failwith "unreachable"
+        in
+        Program(macros,(Network(p,new_block)))
+    
+
 let intermediate ast =
     (*let ast' = resolve ast resolve_while_stmt in*)
     let ast'' = resolve ast resolve_if_stmt in
-        resolve ast'' resolve_exp_stmt
+    let ast''' = resolve ast'' resolve_exp_stmt in
+        implicit_whenever ast'''
         (*ast''*)
