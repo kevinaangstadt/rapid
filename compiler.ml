@@ -957,7 +957,7 @@ let compile (Program(macros,network)) config name =
                                             let (Config.ArrayInfo(new_size)) = abstract_typ in
                                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
                                     end ;
-                                    let return = evaluate_statement f [] "" in
+                                    let return = evaluate_statement f [] "" ~start_automaton:true in
                                     (*remove binding*)
                                     Hashtbl.remove symbol_table name
                                     end
