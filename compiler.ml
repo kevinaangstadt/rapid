@@ -154,33 +154,12 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 | While(_,_) -> Block([])
             in
             match evaluate_expression exp None None id (new_seed ()) with
-            | CounterExp(c,n,if_exp,yes,no,loop,behaviour) ->
+            | CounterExp(c,n,yes,no) ->
             (*if this is a counter experession*)
                 begin
-                (*(c, (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb,loop,behaviour)*)
-                Automata.add_element net (Automata.STE(c^"_trap","$",false,Automata.NotStart,false,[],false)) ;
-                Automata.add_element net (Automata.STE("n_"^c^"_trap","$",true,Automata.NotStart,false,[],false)) ;
-                Automata.add_element net (Automata.STE(c^"_trap_t","\\x26",false,Automata.NotStart,false,[],false)) ;
-                Automata.add_element net (Automata.STE(c^"_trap_t2","\\x26",false,Automata.NotStart,false,[],false)) ;
-                add_all net if_exp ;
-                List.iter (fun a -> Automata.connect net a (c^"_trap") None ; Automata.connect net a ("n_"^c^"_trap") None) last ;
-                if not (loop = "") then
-                    Automata.connect net loop loop None
-                ;
-                Automata.connect net c (Automata.get_id if_exp) None ;
-                Automata.connect net (c^"_trap") (c^"_trap")  None ;
-                Automata.connect net ("n_"^c^"_trap") ("n_"^c^"_trap") None ;
-                Automata.connect net (c^"_trap") (c^"_trap_t") None ;
-                Automata.connect net (c^"_trap_t") (c^"_trap_t2") None ;
-                Automata.connect net ("n_"^c^"_trap") (c^"_trap") None ;
-                Automata.connect net (c^"_trap") c (Some "cnt") ;
-                (*Automata.connect net ("n_"^c^"_trap") c (Some "cnt") ;*)
-                tb := yes ;
-                fb := StringSet.add (c^"_trap_t2") no ;
                 Automata.set_count net c n ;
-                Automata.set_latch net c behaviour ;
-                let true_last = evaluate_statement then_clause (StringSet.elements !tb) label in
-                let false_last = evaluate_statement else_clause (StringSet.elements !fb) label in
+                let true_last = evaluate_statement then_clause yes label in
+                let false_last = evaluate_statement else_clause no label in
                 true_last @ false_last
                 end
             (*this is a regular if*)
@@ -372,10 +351,23 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     | Counter ->
                         let num = get_num c_seed in
                         let id = Printf.sprintf "%s_%s_%d" label s num in
-                        let _ = Hashtbl.add counter_rename s id in
-                        let _ = Hashtbl.add symbol_table s (Variable(id,t,None)) in
+                        let i_id = Printf.sprintf "%s_i" id in
+                        let counter = Automata.Counter(id,100,Automata.Latch,false,[]) in
+                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, []) in
+                        (*Add to symbol table*)
+                        Hashtbl.add counter_rename s id ;
+                        Hashtbl.add symbol_table s (Variable(id,t,None)) ;
+                        (*Add to net*)
+                        Automata.add_element net counter ;
+                        Automata.add_element net inverter ;
+                        Automata.connect net id i_id None ;
+                        (*Reset as soon as in scope*)
+                        List.iter (fun e_id ->
+                            Automata.connect net e_id id None
+                        ) last ;
+                        (*Add to scope*)
                         symbol_scope := StringSet.add s !symbol_scope ;
-                        (id, Some (AutomataElement(Automata.Counter(id,100,Automata.Pulse,false,[]))))
+                        (id, Some (AutomataElement(counter)))
                     | _ ->
                         let x = match init with
                             | None -> None
@@ -655,7 +647,6 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                             let c = match v with
                                 | Some AutomataElement(x) -> x in
                             begin
-                            if not (Automata.contains net c) then Automata.add_element net c ;
                             List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "cnt")) last ; []
                             end
                             
@@ -671,7 +662,6 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                                 | Some AutomataElement(x) -> x in
                             (*Check that we have a counter*)
                             begin
-                            if not (Automata.contains net c) then Automata.add_element net c ;
                             List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "rst")) last ; []
                             end
                     end
@@ -693,45 +683,20 @@ and evaluate_counter_expression (exp : expression) =
         end in
     let helper num c =
         begin
-        let rec create i (e : Automata.element option) =
-            begin
-            if i < 0 then
-                match e with
-                    | Some x -> x
-                    | None -> raise Negative_count
-            else
-                let id = Printf.sprintf "%s_%d" c i in
-                let trigger2 = Automata.STE(id^"_t2","\\x26",false,Automata.NotStart,false,[],false) in
-                let trigger = Automata.STE(id^"_t","\\x26",false,Automata.NotStart,false,[(trigger2,None)],false) in
-                let connect = match e with
-                    | Some x -> [(trigger,None);(x,None)]
-                    | None -> [(trigger,None)] in
-                    let ctr = Automata.STE(id,"$",false,Automata.NotStart,false,connect,false) in
-                    create (i - 1) (Some ctr)
-            end in
-        let state_list low high = List.map (fun a -> Printf.sprintf "%s_%d_t2" c a) (range low high) in
-        let (tb,fb) = match exp.exp with
-            | EQ(_,_) -> ( state_list num (num + 1) , state_list 0 num @ state_list (num + 1) (num + 2) )
-            | GT(_,_) -> ( state_list (num + 1) (num + 2) , state_list 0 (num + 1) )
-            | GEQ(_,_) -> ( state_list num (num + 2) , state_list 0 num )
-            | LEQ(_,_) -> ( state_list 0 (num+1) , state_list (num + 1) (num + 2) )
-            | LT(_,_) ->( state_list 0 num , state_list num (num + 2) ) in
-        
-        match exp.exp with
-            | EQ(_,_)
+        let number = match exp.exp with
             | LEQ(_,_)
-            | LT(_,_) -> (c, (num+2), (create (num+1) None), StringSet.of_list tb, StringSet.of_list fb, Printf.sprintf "%s_%d" c (num+1),Automata.Pulse)
-            | _ ->
-                begin
-                let trigger2 = Automata.STE(Printf.sprintf "%s_t2" c,"\\x26",false,Automata.NotStart,false,[],false) in
-                let trigger_not = Automata.STE(Printf.sprintf "%s_t2_n" c,"\\x26",false,Automata.NotStart,false,[],false) in
-                let negation = Automata.Combinatorial(Inverter,Printf.sprintf "%s_t_i" c, false, false, [(trigger_not,None)]) in
-                let trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",false,Automata.NotStart,false,[(negation,None);(trigger2,None)],false) in
-                let number = match exp.exp with
-                    | GT(_,_) -> (num+1)
-                    | GEQ(_,_) -> num
-                in (c, number, trigger, StringSet.singleton (Printf.sprintf "%s_t2" c), StringSet.singleton (Printf.sprintf "%s_t2_n" c), "",Automata.Latch)
-                end
+            | GT(_,_) -> (num+1)
+            | LT(_,_)
+            | GEQ(_,_) -> num
+        in match exp.exp with
+            | LT(_,_)
+            | LEQ(_,_) ->
+                (*The inverter has the same id as c + "_i" *)
+                (c, number, [c^"_i"], [c])
+            | GT(_,_)
+            | GEQ(_,_) ->
+                (c, number, [c], [c^"_i"])
+                
         end in
     (*if counter is not listed first, flip it!*)
     match exp.exp with
