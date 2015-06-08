@@ -157,9 +157,16 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             | CounterExp(c,n,yes,no) ->
             (*if this is a counter experession*)
                 begin
+                (*Add in traps!*)
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",false,Automata.NotStart,false,[],false) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" c,"\\x26",false,Automata.NotStart,false,[],false) in
+                Automata.add_element net yes_trigger ;
+                Automata.add_element net no_trigger ;
+                Automata.connect net yes (Automata.get_id yes_trigger) None;
+                Automata.connect net no (Automata.get_id no_trigger) None;
                 Automata.set_count net c n ;
-                let true_last = evaluate_statement then_clause yes label in
-                let false_last = evaluate_statement else_clause no label in
+                let true_last = evaluate_statement then_clause [(Automata.get_id yes_trigger)] label in
+                let false_last = evaluate_statement else_clause [(Automata.get_id no_trigger)] label in
                 true_last @ false_last
                 end
             (*this is a regular if*)
@@ -692,10 +699,10 @@ and evaluate_counter_expression (exp : expression) =
             | LT(_,_)
             | LEQ(_,_) ->
                 (*The inverter has the same id as c + "_i" *)
-                (c, number, [c^"_i"], [c])
+                (c, number, c^"_i", c)
             | GT(_,_)
             | GEQ(_,_) ->
-                (c, number, [c], [c^"_i"])
+                (c, number, c, c^"_i")
                 
         end in
     (*if counter is not listed first, flip it!*)
