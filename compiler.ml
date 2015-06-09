@@ -370,7 +370,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         Automata.connect net id i_id None ;
                         (*Reset as soon as in scope*)
                         List.iter (fun e_id ->
-                            Automata.connect net e_id id None
+                            Automata.connect net e_id id (Some "rst")
                         ) last ;
                         (*Add to scope*)
                         symbol_scope := StringSet.add s !symbol_scope ;
