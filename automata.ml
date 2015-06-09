@@ -133,11 +133,14 @@ let e2_conn : element_connections = begin match terminal with
     end in
     match e1 with
         | STE(id,set,neg,strt,latch,connect,report) ->
-            Hashtbl.replace (!net).states e1_id (STE(id,set,neg,strt,latch,e2_conn::connect,report))
+            if not (List.mem e2_conn connect) then
+                Hashtbl.replace (!net).states e1_id (STE(id,set,neg,strt,latch,e2_conn::connect,report))
         | Counter(id,target,behavior,report,connect) ->
-            Hashtbl.replace (!net).states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
+            if not (List.mem e2_conn connect) then
+                Hashtbl.replace (!net).states e1_id (Counter(id,target,behavior,report,e2_conn::connect))
         | Combinatorial(typ,id,eod,report,connect) ->
-            Hashtbl.replace (!net).states e1_id (Combinatorial(typ,id,eod,report,e2_conn::connect))
+            if not (List.mem e2_conn connect) then
+                Hashtbl.replace (!net).states e1_id (Combinatorial(typ,id,eod,report,e2_conn::connect))
 
 let set_count (net:network ref) e_id cnt =
 let e = begin try Hashtbl.find (!net).states e_id
