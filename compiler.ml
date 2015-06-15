@@ -17,7 +17,7 @@ let val_to_string value =
         | IntValue(i) -> Printf.sprintf "%d" i
         | CharValue(c) -> Printf.sprintf "%c" c
         | BooleanValue(b) -> Printf.sprintf "%b" b
-        | AutomataElement(_) -> "Automata"
+        | CounterList(_) -> "CounterList"
         | AbstractValue(_,s)
         | AbstractChar(s) -> s
 
@@ -154,17 +154,17 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 | While(_,_) -> Block([])
             in
             match evaluate_expression exp None None id (new_seed ()) with
-            | CounterExp(c,n,yes,no) ->
+            | CounterExp(c_list,n_list,yes,no) ->
             (*if this is a counter experession*)
                 begin
                 (*Add in traps!*)
-                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" c,"\\x26",false,Automata.NotStart,false,[],false) in
-                let no_trigger = Automata.STE(Printf.sprintf "%s_f" c,"\\x26",false,Automata.NotStart,false,[],false) in
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,"\\x26",false,Automata.NotStart,false,[],false) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,"\\x26",false,Automata.NotStart,false,[],false) in
                 Automata.add_element net yes_trigger ;
                 Automata.add_element net no_trigger ;
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
                 Automata.connect net no (Automata.get_id no_trigger) None;
-                Automata.set_count net c n ;
+                List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
                 let true_last = evaluate_statement then_clause [(Automata.get_id yes_trigger)] label in
                 let false_last = evaluate_statement else_clause [(Automata.get_id no_trigger)] label in
                 true_last @ false_last
@@ -351,19 +351,19 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             Some (ArrayValue(a))
             in
             begin
-            List.iter (fun (s,t,init) ->
+            List.iter (fun dec ->
                 (*TODO support list*)
                 let (id,value) =
-                    match t with
+                    match dec.typ with
                     | Counter ->
                         let num = get_num c_seed in
-                        let id = Printf.sprintf "%s_%s_%d" label s num in
+                        let id = Printf.sprintf "%s_%s_%d" label dec.var num in
                         let i_id = Printf.sprintf "%s_i" id in
                         let counter = Automata.Counter(id,100,Automata.Latch,false,[]) in
                         let inverter = Automata.Combinatorial(Inverter,i_id, false, false, []) in
                         (*Add to symbol table*)
-                        Hashtbl.add counter_rename s id ;
-                        Hashtbl.add symbol_table s (Variable(id,t,None)) ;
+                        Hashtbl.add counter_rename dec.var id ;
+                        (*Hashtbl.add symbol_table dec.var (Variable(id,dec.typ,None)) ;*)
                         (*Add to net*)
                         Automata.add_element net counter ;
                         Automata.add_element net inverter ;
@@ -373,15 +373,63 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             Automata.connect net e_id id (Some "rst")
                         ) last ;
                         (*Add to scope*)
-                        symbol_scope := StringSet.add s !symbol_scope ;
-                        (id, Some (AutomataElement(counter)))
+                        symbol_scope := StringSet.add dec.var !symbol_scope ;
+                        (dec.var, Some (CounterList([id])))
+                    | DoubleCounter(is_eq) ->
+                        let num1 = get_num c_seed in
+                        let num2 = get_num c_seed in
+                        let id1 = Printf.sprintf "%s_%s_%d" label dec.var num1 in
+                        let id2 = Printf.sprintf "%s_%s_%d" label dec.var num2 in
+                        let i_id1 = Printf.sprintf "%s_i" id1 in
+                        let i_id2 = Printf.sprintf "%s_i" id2 in
+                        let id_true = Printf.sprintf "%s_true" id1 in
+                        let id_false = Printf.sprintf "%s_false" id1 in
+                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,[]) in
+                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,[]) in
+                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, []) in
+                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, []) in
+                        let out_true = if is_eq then
+                            Automata.Combinatorial(AND,id_true,false,false,[])
+                        else
+                            Automata.Combinatorial(OR,id_true,false,false,[])
+                        in
+                        let out_false = if is_eq then
+                            Automata.Combinatorial(AND,id_false,false,false,[])
+                        else
+                            Automata.Combinatorial(OR,id_false,false,false,[])
+                        in
+                        (*Add to symbol table*)
+                        Hashtbl.add counter_rename dec.var id1 ;
+                        Hashtbl.add counter_rename dec.var id2 ;
+                        (*Hashtbl.add symbol_table dec.var (Variable(id,dec.typ,None)) ;*)
+                        (*Add to net*)
+                        Automata.add_element net counter1 ;
+                        Automata.add_element net counter2 ;
+                        Automata.add_element net inverter1 ;
+                        Automata.add_element net inverter2 ;
+                        Automata.add_element net out_true ;
+                        Automata.add_element net out_false ;
+                        Automata.connect net id1 i_id1 None ;
+                        Automata.connect net id2 i_id2 None ;
+                        Automata.connect net i_id1 id_true None ;
+                        Automata.connect net id2 id_true None ;
+                        Automata.connect net id1 id_false None ;
+                        Automata.connect net i_id2 id_false None ;
+                        (*Reset as soon as in scope*)
+                        List.iter (fun e_id ->
+                            Automata.connect net e_id id1 (Some "rst");
+                            Automata.connect net e_id id2 (Some "rst")
+                        ) last ;
+                        (*Add to scope*)
+                        symbol_scope := StringSet.add dec.var !symbol_scope ;
+                        (dec.var, Some (CounterList([id1;id2])))
                     | _ ->
-                        let x = match init with
+                        let x = match dec.init with
                             | None -> None
                             | Some i -> gen_value i
-                        in (s,x) in
+                        in (dec.var,x) in
                 (* TODO We need some notion of scope to remove these after the fact! *)
-                Hashtbl.add symbol_table id (Variable(id,t,value)) ;
+                Hashtbl.add symbol_table id (Variable(id,dec.typ,value)) ;
                 symbol_scope := StringSet.add id !symbol_scope ;
             ) var ;
             
@@ -428,7 +476,9 @@ and evaluate_expression (exp : expression) (before : Automata.element list optio
     (*get the type of an expression...needed to determine how to eval the exp*)
     match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
-        | Counter -> CounterExp(evaluate_counter_expression exp)
+        | DoubleCounter(_)
+        | Counter ->
+         CounterExp(evaluate_counter_expression exp)
         | Automata -> AutomataExp(evaluate_expression_aut exp before s prefix seed)
         | Int -> IntExp(evaluate_int_expression exp)
         | Char -> CharExp(evaluate_char_expression exp)
@@ -469,6 +519,7 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             else if b.exp = Input then
                 let new_element = Automata.STE(id,Char.escaped (get_value a),false,Automata.NotStart,false,[],false) in
                 helper new_element
+
             else raise (Syntax_error "Something with Input")
             end
         | NEQ(a,b) -> begin (* TODO This is just copied and pasted from above; need to fix this *)
@@ -646,30 +697,36 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             begin match b with
                 | "count" ->
                     begin
-                    let id = Hashtbl.find counter_rename a in
-                    let counter = Hashtbl.find symbol_table id in
+                    (*let id = Hashtbl.find counter_rename a in*)
+                    let counter = Hashtbl.find symbol_table a in
                     let last = match before with Some x -> x | _ -> [] in
+                    
                     match counter with
                         | Variable(s,t,v) ->
-                            let c = match v with
-                                | Some AutomataElement(x) -> x in
+                            let c_list = match v with
+                                | Some CounterList(x) -> x in
                             begin
-                            List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "cnt")) last ; []
+                            List.iter ( fun c -> 
+                                List.iter (fun l -> Automata.connect net (Automata.get_id l) c (Some "cnt")) last
+                            ) c_list ; []
+                            
                             end
                             
                     end
                 | "reset" ->
                     begin
-                    let id = Hashtbl.find counter_rename a in
-                    let counter = Hashtbl.find symbol_table id in
+                    (*let id = Hashtbl.find counter_rename a in*)
+                    let counter = Hashtbl.find symbol_table a in
                     let last = match before with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
-                            let c = match v with
-                                | Some AutomataElement(x) -> x in
+                            let c_list = match v with
+                                | Some CounterList(x) -> x in
                             (*Check that we have a counter*)
                             begin
-                            List.iter (fun l -> Automata.connect net (Automata.get_id l) s (Some "rst")) last ; []
+                            List.iter ( fun c ->
+                                List.iter (fun l -> Automata.connect net (Automata.get_id l) c (Some "rst")) last
+                            ) c_list ; []
                             end
                     end
 
@@ -684,28 +741,35 @@ and evaluate_counter_expression (exp : expression) =
         match v.exp with
             | Lval((a,_)) ->
                 let id = Hashtbl.find counter_rename a in
-                let (Variable(name,typ, Some (AutomataElement(e)))) = Hashtbl.find symbol_table id in
-                    Automata.get_id e
+                let (Variable(name,typ, Some (CounterList(e)))) = Hashtbl.find symbol_table a in
+                    e
                 
         end in
-    let helper num c =
+    let helper num c_list =
         begin
+        let c = List.hd c_list in
         let number = match exp.exp with
             | LEQ(_,_)
-            | GT(_,_) -> (num+1)
+            | GT(_,_) -> [(num+1)]
             | LT(_,_)
-            | GEQ(_,_) -> num
+            | GEQ(_,_) -> [num]
+            | _ -> [num;(num+1)]
         in match exp.exp with
             | LT(_,_)
             | LEQ(_,_) ->
                 (*The inverter has the same id as c + "_i" *)
-                (c, number, c^"_i", c)
+                (c_list, number, c^"_i", c)
             | GT(_,_)
             | GEQ(_,_) ->
-                (c, number, c, c^"_i")
+                (c_list, number, c, c^"_i")
+            | EQ(_,_) ->
+                (c_list, List.rev number, c^"_true",c^"_false")
+            | NEQ(_,_) ->
+                (c_list, number, c^"_true",c^"_false")
                 
         end in
     (*if counter is not listed first, flip it!*)
+    
     match exp.exp with
         | EQ(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = EQ(b,a); })
                      else
@@ -868,6 +932,7 @@ and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)
         Hashtbl.add symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
+    
     let last = match stmt with
         | Block(b) -> evaluate_statement stmt last !s ~start_automaton:start_automaton
     in

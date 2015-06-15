@@ -91,6 +91,35 @@ let rec resolve_exp_stmt stmt =
         | ExpStmt(e) -> ExpStmt(resolve_exp e)
         | _ -> stmt
 
+let rec resolve_counter_exp exp =
+    match exp.expr_type with
+    | Counter ->
+        begin
+        match exp.exp with
+        | EQ(a,b) 
+        | NEQ(a,b) ->
+            begin
+            let value = if a.expr_type = Counter then b else a in
+            let counter = if a.expr_type = Counter then a else b in
+            let counter_name = match counter.exp with
+                | Lval(s,_) -> s
+                | _ -> failwith "should be unreachable"
+            in
+            match exp.exp with
+            | EQ(_,_) ->
+                {exp with exp = PAnd({exp with exp=LEQ({counter with exp = Lval(counter_name^"l",NoOffset)},value)},
+                                     {exp with exp=GEQ({counter with exp = Lval(counter_name^"r",NoOffset)},value)})}
+            | NEQ(_,_) ->
+                {exp with exp = Or({exp with exp=GT({counter with exp = Lval(counter_name^"l",NoOffset)},value)},
+                                   {exp with exp=LT({counter with exp = Lval(counter_name^"r",NoOffset)},value)})}
+            end
+        | And(a,b) -> {exp with exp = And(resolve_counter_exp a, resolve_counter_exp b)}
+        | PAnd(a,b) -> {exp with exp = PAnd(resolve_counter_exp a, resolve_counter_exp b)}
+        | Or(a,b) -> {exp with exp = Or(resolve_counter_exp a, resolve_counter_exp b)}
+        | Not(e) -> {exp with exp = Not(resolve_counter_exp e)}
+        end
+    | _ -> exp
+
 let rec resolve_if_stmt stmt =
     match stmt with
         | Allof(stmts) -> Allof(List.map resolve_if_stmt stmts)
@@ -98,6 +127,7 @@ let rec resolve_if_stmt stmt =
         | If(e,s1,s2) ->
             begin
             match e.expr_type with
+            | DoubleCounter(_) 
             | Counter -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
             | _ ->
                 Either([

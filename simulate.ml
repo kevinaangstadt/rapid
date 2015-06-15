@@ -21,7 +21,7 @@ let val_to_string value =
         | IntValue(i) -> Printf.sprintf "%d" i
         | CharValue(c) -> Printf.sprintf "%c" c
         | BooleanValue(b) -> Printf.sprintf "%b" b
-        | AutomataElement(_) -> "Automata"
+        | CounterList(_) -> "CounterList"
 
 type state = {
     input : char list ;
@@ -141,16 +141,16 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                             (* add binding *)
                             let new_assign = (Assign((name,NoOffset),{source with exp = Lit(CharLit(c,Char))})) in
                                 EvaluatingStatement(f)::EvaluatingStatement(new_assign)::last
-                        ) [EvaluatingStatement(VarDec([name,t,None]))] char_list in
+                        ) [EvaluatingStatement(VarDec([{var=name;typ=t;init=None;}]))] char_list in
                         add_job ((List.rev new_stmts) @ next) sigma
                 (*TODO Add Array iteration here*)
                 end
         | VarDec(var) ->
-            let sigma_prime = List.fold_left (fun sigma_prime (s,t,init) ->
-                let value,sigma_prime_prime = match t with
+            let sigma_prime = List.fold_left (fun sigma_prime dec ->
+                let value,sigma_prime_prime = match dec.typ with
                     | Counter -> Some(IntValue(0)), sigma_prime
                     | _ ->
-                        match init with
+                        match dec.init with
                             | None -> None, sigma_prime
                             (*TODO ARRAY INITS!*)
                             | Some (PrimitiveInit(e)) ->
@@ -158,7 +158,7 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                                 let [(tmp,sig_prime)] = evaluate_expression e sigma_prime in
                                     (Some tmp),sig_prime
                 in
-                    Hashtbl.add sigma_prime_prime.memory s (Variable(s,t,value)) ;
+                    Hashtbl.add sigma_prime_prime.memory dec.var (Variable(dec.var,dec.typ,value)) ;
                     sigma_prime_prime
             ) sigma var in
                 add_job next sigma_prime

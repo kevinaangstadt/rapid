@@ -19,11 +19,11 @@ let macro_map_lookup m =
         Hashtbl.find macro_map m
     with Not_found -> raise (Macro_error (Printf.sprintf "Macro %s not found." m))
 
-type environment = typ StringMap.t
+type environment = (typ*vardec option) StringMap.t
 
 let var_map : environment = StringMap.empty
 
-let var_map_lookup v map : typ =
+let var_map_lookup v map : typ*vardec option =
     try
         StringMap.find v map
     with Not_found -> raise (Var_error (Printf.sprintf "Variable %s is not in scope." v))
@@ -35,8 +35,19 @@ let get_lval_type (l,o) gamma =
             | Index(_,o2) -> match t with
                 | Array(t2) -> modify_type t2 o2
     in
-    let t = var_map_lookup l gamma in
+    let t,_ = var_map_lookup l gamma in
         modify_type t o
+
+(* Update a VarDec to be an internal DoubleCounter type *)
+let set_double_counter exp t gamma =
+    match exp.exp with
+        | Lval(s,_) ->
+            let _,(Some dec) = var_map_lookup s gamma in
+                match t with
+                    | EQ(_,_) -> dec.typ <- DoubleCounter(true)
+                    | NEQ(_,_) -> dec.typ <- DoubleCounter(false)
+            
+        | _ -> failwith "unreachable: set_double_counter"
 
 (* TODO Does this really make sense to approach this way?  I suppose
  * since this is only for convenience, but more consideration would
@@ -88,8 +99,8 @@ let check (Program(macros,network) as p) : program =
                     | Boolean,Boolean
                     | Char,Char
                     | Int,Int -> Boolean
-                    | Counter,Int
-                    | Int,Counter -> Counter
+                    | Counter,Int -> set_double_counter a exp.exp bt; Counter
+                    | Int,Counter -> set_double_counter b exp.exp bt; Counter
                     | Automata, Char
                     | Char, Automata -> Automata
                 in
@@ -185,6 +196,7 @@ let check (Program(macros,network) as p) : program =
             | Int
             | Char
             | Counter
+            | DoubleCounter(_)
             | Automata
             | Boolean ->
                 begin match o with
@@ -243,20 +255,23 @@ let check (Program(macros,network) as p) : program =
                     | String -> if t <> Char then raise (Type_error "Iterating over a string requires a char parameter.")
                     | Array(t2) -> if t <> t2 then raise (Type_error "ForEach/Some loop type error.")
                 in
-                let gamma_prime = StringMap.add l t e_t in
+                let gamma_prime = StringMap.add l (t,None) e_t in
                 let _ = check_statement s gamma_prime in
                 gamma
                 end
             | VarDec(vars) ->
                 (* TODO Don't allow Counters inside of arrays *)
-                List.fold_left (fun gamma_prime ((n,typ,i) as dec) ->
-                    match i with
-                    | None -> StringMap.add n typ gamma_prime
+                (* n -> .var
+                   typ -> .typ
+                   i -> .init *)
+                List.fold_left (fun gamma_prime dec ->
+                    match dec.init with
+                    | None -> StringMap.add dec.var (dec.typ,Some dec) gamma_prime
                     | Some x -> match x with
                         | PrimitiveInit(e) ->
                             let gamma_prime = check_exp e gamma_prime in
-                            if typ = e.expr_type then
-                                StringMap.add n typ gamma_prime
+                            if dec.typ = e.expr_type then
+                                StringMap.add dec.var (dec.typ,Some dec) gamma_prime
                             else raise (Type_error "Initialized value does not match type.")
                         | ArrayInit(e) ->
                             let rec check_array a =
@@ -266,7 +281,7 @@ let check (Program(macros,network) as p) : program =
                             in
                             print_endline "TC Warning: Array init not checked";
                             check_array x ;
-                            StringMap.add n typ gamma_prime
+                            StringMap.add dec.var (dec.typ,Some dec) gamma_prime
                         (*TODO handle type checking for array initializers!*)
                 ) gamma (List.rev vars)
             | Assign(n,e) ->
@@ -306,7 +321,7 @@ let check (Program(macros,network) as p) : program =
                     if StringMap.mem s gamma_prime then
                         raise (Var_error (Printf.sprintf "Parameter %s has already been declared." s))
                     else
-                        StringMap.add s t gamma_prime
+                        StringMap.add s (t,None) gamma_prime
             ) var_map params
             in
             match stmt with
@@ -325,7 +340,7 @@ let check (Program(macros,network) as p) : program =
             List.fold_left (fun gamma_prime (Param(n,typ)) ->
                 match typ with
                     | Counter -> raise (Type_error "Counters cannot be passed to a network")
-                    | _ -> StringMap.add n typ gamma_prime
+                    | _ -> StringMap.add n (typ,None) gamma_prime
             ) gamma p in
         match stmt with
             | Block(_) -> check_statement stmt (verify_network_params params var_map)

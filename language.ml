@@ -16,6 +16,7 @@ type typ =
     | Int
     | Char
     | Counter
+    | DoubleCounter of bool (*Internal; true means EQ, else NEQ*)
     | Array of typ
     | Automata
     | Boolean
@@ -72,6 +73,12 @@ type parameters = Parameters of param list
 type initialize =
     | PrimitiveInit of  expression
     | ArrayInit of initialize list
+    
+type vardec = {
+    var          : string ;
+    mutable typ  : typ ;
+    init         : initialize option
+}
 
 type statement =
     | Report
@@ -84,7 +91,7 @@ type statement =
     | ForEach of param * expression * statement
     | While of expression * statement
     | Whenever of expression * statement
-    | VarDec of (string * typ * initialize option) list
+    | VarDec of vardec list
     | Assign of lval * expression
     | ExpStmt of expression 
     | MacroCall of string * arguments
@@ -107,7 +114,7 @@ type value =
     | IntValue of int
     | CharValue of char
     | BooleanValue of bool
-    | AutomataElement of Automata.element
+    | CounterList of string list
     | ArrayValue of value option array
     | AbstractValue of Config.size * string
     | AbstractChar of string
@@ -117,7 +124,7 @@ type container =
     | Variable of string * typ * value option
 type exp_return =
     | AutomataExp of Automata.element list
-    | CounterExp of (string * int * string * string)
+    | CounterExp of (string list * int list * string * string)
     | BooleanExp of bool
     | IntExp of int
     | CharExp of char
@@ -144,6 +151,7 @@ and typ_to_str t = match t with
     | Int ->    "int"
     | Char ->   "char"
     | Counter ->"Counter"
+    | DoubleCounter(_) -> "DoubleCounter(internal)"
     | Boolean ->"bool"
     | NoType -> "ERROR!"
     | Automata->"Automata(internal)"
@@ -184,10 +192,10 @@ and statement_to_str (a : statement) = match a with
     | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | Whenever(exp,t) -> sprintf "whenever( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | ForEach(var,exp,s) -> sprintf "foreach( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
-    | VarDec(var) -> List.fold_left (fun prev (s,t,i) ->
-                                    let new_var = match i with
-                                        | None -> sprintf "%s %s;\n" (typ_to_str t) s
-                                        | Some x -> sprintf "%s %s = %s;\n" (typ_to_str t) s (init_to_str x)
+    | VarDec(var) -> List.fold_left (fun prev vardec ->
+                                    let new_var = match vardec.init with
+                                        | None -> sprintf "%s %s;\n" (typ_to_str vardec.typ) vardec.var
+                                        | Some x -> sprintf "%s %s = %s;\n" (typ_to_str vardec.typ) vardec.var (init_to_str x)
                                     in prev ^ new_var
                                  ) "" var
     | Assign(l,e) -> sprintf "%s = %s;\n" (lval_to_str l) (exp_to_str e)

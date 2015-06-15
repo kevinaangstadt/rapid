@@ -179,7 +179,12 @@ statement:
 
 declaration:
       typ declarator_list {
-        let dec_list = List.map (fun (name,value) -> (name,$1,value)) $2 in
+        let dec_list = List.map (fun (name,value) ->
+            {
+                var = name;
+                typ = $1;
+                init = value;
+            }) $2 in
         VarDec(List.rev dec_list)
     }
 ;
