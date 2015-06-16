@@ -207,33 +207,40 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 else evaluate_statement else_clause last label
             end
         | Whenever(exp,stmt) ->
+            begin
             let id = Printf.sprintf "%s_if_%d" label (get_num if_seed) in
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
             Printf.printf "start_of_automaton = %b\n" start_of_automaton ;
-            let (AutomataExp(e_list)) = evaluate_expression exp None None id (new_seed ()) in
-            let end_of_exp = find_last e_list in
-            let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
-            Automata.add_element net spin ;
-            (*Connect spin to itself...so that it spins!*)
-            Automata.connect net (Automata.get_id spin) (Automata.get_id spin) None ;
-            List.iter (fun e ->
-                add_all net e ;
-                (*Add connections from the spin guard to the exp guard*)
-                Automata.connect net (Automata.get_id spin) (Automata.get_id e) None ;
-                if start_of_automaton then
-                    Automata.set_start net (Automata.get_id e) Automata.Start
-            ) e_list ;
-            List.iter (fun id2 ->
-                (*Add connect from last to the spin guard*)
-                Automata.connect net id2 (Automata.get_id spin) None ;
-                (*Add all of the connections from last to the exp guard*)
-                List.iter (fun e ->
-                    Automata.connect net id2 (Automata.get_id e) None
-                ) e_list;
-            ) last ;
-            if start_of_automaton then
-                Automata.set_start net (Automata.get_id spin) Automata.Start;
-            evaluate_statement stmt (List.map Automata.get_id end_of_exp) label
+            let exp_return = evaluate_expression exp None None id (new_seed ()) in
+            match exp_return with
+                | AutomataExp(e_list) -> 
+                    let end_of_exp = find_last e_list in
+                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
+                    Automata.add_element net spin ;
+                    (*Connect spin to itself...so that it spins!*)
+                    Automata.connect net (Automata.get_id spin) (Automata.get_id spin) None ;
+                    List.iter (fun e ->
+                        add_all net e ;
+                        (*Add connections from the spin guard to the exp guard*)
+                        Automata.connect net (Automata.get_id spin) (Automata.get_id e) None ;
+                        if start_of_automaton then
+                            Automata.set_start net (Automata.get_id e) Automata.Start
+                    ) e_list ;
+                    List.iter (fun id2 ->
+                        (*Add connect from last to the spin guard*)
+                        Automata.connect net id2 (Automata.get_id spin) None ;
+                        (*Add all of the connections from last to the exp guard*)
+                        List.iter (fun e ->
+                            Automata.connect net id2 (Automata.get_id e) None
+                        ) e_list;
+                    ) last ;
+                    if start_of_automaton then
+                        Automata.set_start net (Automata.get_id spin) Automata.Start;
+                    evaluate_statement stmt (List.map Automata.get_id end_of_exp) label
+                | CounterExp(c_list,n_list,yes,no) ->
+                    List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
+                    evaluate_statement stmt [yes] label
+            end
         | Either(statement_blocks) ->
             begin
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
@@ -786,6 +793,39 @@ and evaluate_counter_expression (exp : expression) =
         | LT(a,b) -> if is_counter b then evaluate_counter_expression ({ exp with exp = GT(b,a); })
                      else
                         helper (evaluate_int_expression b) (get_counter a)
+        | Not(e) ->
+            let c_list,n_list,no,yes = evaluate_counter_expression e in
+            (c_list,n_list,yes,no)
+        | And(a,b)
+        | PAnd(a,b) ->
+            let a_c_list,a_n_list,a_yes,a_no = evaluate_counter_expression a in
+            let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
+            let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
+            let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
+            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,[]) in
+            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,[]) in
+                Automata.add_element net yes_and ;
+                Automata.add_element net no_or ;
+                Automata.connect net a_yes yes None ;
+                Automata.connect net b_yes yes None ;
+                Automata.connect net a_no no None ;
+                Automata.connect net b_no no None ;
+                (a_c_list@b_c_list,a_n_list@b_n_list,yes,no)
+        | Or(a,b) ->
+            let a_c_list,a_n_list,a_yes,a_no = evaluate_counter_expression a in
+            let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
+            let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
+            let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
+            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,[]) in
+            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,[]) in
+                Automata.add_element net yes_or ;
+                Automata.add_element net no_and ;
+                Automata.connect net a_yes yes None ;
+                Automata.connect net b_yes yes None ;
+                Automata.connect net a_no no None ;
+                Automata.connect net b_no no None ;
+                (a_c_list@b_c_list,a_n_list@b_n_list,yes,no)
+        | _ -> failwith (exp_to_str exp) ; (["foo"],[1],"bar","baz")
 
 and evaluate_boolean_expression exp =
     match exp.exp with

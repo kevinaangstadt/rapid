@@ -141,6 +141,8 @@ let check (Program(macros,network) as p) : program =
                 let typ = match a.expr_type,b.expr_type with
                     | Boolean,Boolean -> Boolean
                     | Automata,Automata -> Automata
+                    | Counter,Counter -> Counter
+                    | _ -> raise (Type_error "unsupported combination of expression types")
                 in
                     exp.expr_type <- typ ; bt
                 end
@@ -237,7 +239,8 @@ let check (Program(macros,network) as p) : program =
                         (*EXP can only be Automata*)
                         match exp.expr_type with
                             | Automata -> s1_t
-                            | _ -> raise (Type_error "Whenever statements can only have Automata expressions")
+                            | Counter -> s1_t
+                            | _ -> raise (Type_error "Whenever statements can only have Automata or Counter expressions")
                         end
                     | _ -> s1_t
                 end
