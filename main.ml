@@ -25,10 +25,12 @@ let process (lexbuf : Lexing.lexbuf) config =
                 
                 (*print_endline (Language.program_to_str program) ; *)  (**)
             else
+                (
                 let channel = open_out (Printf.sprintf "%s" !intermediate) in
                 Printf.fprintf channel "%s" (Language.program_to_str program_i) ;
                 close_out channel ;
-                exit(0);;
+                exit(0)
+                )
     (*with exn ->
       begin
         let curr = lexbuf.Lexing.lex_curr_p in

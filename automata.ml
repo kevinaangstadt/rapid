@@ -329,7 +329,7 @@ let element_to_str e =
             end
         | Counter(id,target,behavior,report,connect) -> begin
             let rep_line =
-                if report then "<report-on-match/>\n" else "" in
+                if report then "<report-on-target/>\n" else "" in
             Printf.sprintf "<counter id=\"%s\" target=\"%d\" at-target=\"%s\">\n" id target (behavior_to_str behavior) ^
             rep_line ^
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-target element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
@@ -352,7 +352,7 @@ let element_to_str e =
             Printf.sprintf "<%s id=\"%s\" high-only-on-eod=\"%b\">" comb_typ id eod ^
             rep_line ^
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-high element = \"%s\" />\n" (connection_id_to_str b) ) "" connect ^
-            Printf.sprintf "</%s>" comb_typ
+            Printf.sprintf "</%s>\n" comb_typ
 
 let network_to_str (net:network ref) =
     let internal = ref "" in
