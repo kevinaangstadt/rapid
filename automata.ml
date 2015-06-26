@@ -316,6 +316,9 @@ let element_to_str e =
     in match e with
         | STE(id,set,neg,strt,latch,connect,report) -> begin
             let set_to_str set =
+                if set = "*" then
+                    set
+                else
                 if neg then "[^" ^ set ^ "@$\\x26]"
                 else "[" ^ set ^ "]"
             in
@@ -367,6 +370,17 @@ let network_to_file (net:network ref) (channel:out_channel) =
     Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
     Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description ;
     Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
+    Printf.fprintf channel "</automata-network>"
+
+let networks_to_file (nets:(network ref) list) (channel:out_channel) =
+    assert (nets <> []);
+    Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
+    Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" !(List.hd nets).id !(List.hd nets).id !(List.hd nets).description ;
+    let size = List.fold_left (fun size (net:network ref) ->
+        Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
+        size + (Hashtbl.length (!net).states);
+    ) 0 nets in
+    Printf.printf "Automaton size: %d\n%!" size;
     Printf.fprintf channel "</automata-network>"
 
 let rec print_rec (e:element) =

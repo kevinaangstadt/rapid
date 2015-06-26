@@ -48,6 +48,7 @@ let if_seed = new_seed ()
 let c_seed = new_seed ()
 let while_seed = new_seed ()
 let e_seed = new_seed ()
+let m_seed = new_seed ()
 
 
 let evaluate_report last=
@@ -918,7 +919,7 @@ and evaluate_array_expression exp =
                     
 and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
-    let s = ref name in
+    let s = Printf.sprintf "%s_%d" name (get_num m_seed) in
     (*back up symbol scope and create a new one*)
     let scope_backup = !symbol_scope in
     let return_backup = !return_list in
@@ -962,19 +963,19 @@ and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)
             | Some(v) -> v
             | _ -> StringValue("")
         in
-        s := Printf.sprintf "%s_%s" !s (String.map (fun c ->
+        (*s := Printf.sprintf "%s_%s" !s (String.map (fun c ->
             match c with
                 | '['
                 | ']'
                 | '+' -> '_'
                 | _ -> c
-        ) (val_to_string v)) ; 
+        ) (val_to_string v)) ;*) 
         Hashtbl.add symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
     
     let last = match stmt with
-        | Block(b) -> evaluate_statement stmt last !s ~start_automaton:start_automaton
+        | Block(b) -> evaluate_statement stmt last s ~start_automaton:start_automaton
     in
     (* remove those bindings again *)
     List.iter(fun (Param(p,t)) ->
@@ -1059,10 +1060,10 @@ let compile (Program(macros,network)) config name =
                                     Printf.printf "Number of initial blocks: %d\n" num_blocks;
                                     tiling_optimizer (num_blocks) 1
                                 else
-                                    net
-                            | _ -> evaluate_statement s [] "" ; net
+                                    Automata.clone net
+                            | _ -> evaluate_statement s [] "" ; Automata.clone net
                             end
-                        | _ -> evaluate_statement s [] "" ; net
+                        | _ -> evaluate_statement s [] "" ; Automata.clone net
                     ) b in
                 Hashtbl.iter (fun k v ->
                     Printf.printf "%s -> %s\n" k v

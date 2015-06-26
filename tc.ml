@@ -303,7 +303,7 @@ let check (Program(macros,network) as p) : program =
                     else
                     gamma_prime
                 ) gamma b params
-                with Invalid_argument(_) -> raise (Syntax_error "invalid number of arguments")
+                with Invalid_argument(_) -> raise (Syntax_error (Printf.sprintf "invalid number of arguments in call to %s" a))
                 end
                 
     in

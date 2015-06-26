@@ -75,11 +75,14 @@ let set_out out = output := out in
 let config = ref "" in
 let set_config new_c = config := new_c in
 
+let merge = ref false in
+
 let argspec = [
         ("-o", Arg.String (set_out), "filename Names output file; a.anml by default" );
         ("-c", Arg.String (set_config), "config_file Provides variable configuration for network");
         ("-i", Arg.String (set_intermediate), "filename Write intermediate RAPID to filename");
-        ("--tiling", Arg.Set Compiler.do_tiling, " Enable tiling optimization")
+        ("--tiling", Arg.Set Compiler.do_tiling, " Enable tiling optimization");
+        ("--merge", Arg.Set merge, " Combine output into single ANML file")
     ] in
 let argspec = Arg.align argspec in
     Arg.parse argspec (fun x -> file := x) "Usage: language [options] [input file]" ;
@@ -94,11 +97,16 @@ let argspec = Arg.align argspec in
     in
     let anml = read_file !file config in
     try
-        List.mapi (fun i anml ->
-            let channel = open_out (Printf.sprintf "%d.%s" i !output) in
-            (Automata.network_to_file anml channel) ;
+        if not !merge then
+            List.iteri (fun i a ->
+                let channel = open_out (Printf.sprintf "%d.%s" i !output) in
+                (Automata.network_to_file a channel) ;
+                close_out channel
+            ) anml
+        else
+            let channel = open_out !output in
+            Automata.networks_to_file anml channel ;
             close_out channel
-        ) anml
         
     with Sys_error _ ->
         Printf.printf "Failed to write output" ; exit (-1)

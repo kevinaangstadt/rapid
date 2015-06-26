@@ -91,7 +91,8 @@ rule initial = parse
     
     | eof       { EOF }
     | _         {
-        Printf.printf "invalid character '%s'\n" (Lexing.lexeme lexbuf) ;
+        let line,col = where lexbuf in
+        Printf.printf "invalid character on line %d col %d: '%s'\n" line col (Lexing.lexeme lexbuf) ;
         exit 1 (*FIXME Nice error handling needed here*)
     }
 
