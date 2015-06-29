@@ -120,8 +120,8 @@ args:
 ;
 
 arg_list:
-      operand { [$1] }
-    | operand TCOMMA arg_list { $1 :: $3 }
+      expression { [$1] }
+    | expression TCOMMA arg_list { $1 :: $3 }
 ;
 
 formal_param_dec:

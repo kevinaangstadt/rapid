@@ -913,9 +913,25 @@ and evaluate_array_expression exp =
     match exp.exp with
         | Lval((a,o)) ->
             let Variable(n,t,(Some v)) = symbol_variable_lookup a in
+                begin
                 match v with
                     | ArrayValue(s) -> ArrayExp(s)
                     | AbstractValue(s,pre) -> AbstractExp((s,pre,t))
+                end
+        | Fun((a,_),b,Arguments(args)) ->
+            begin
+            match a with
+                | "Integer" ->
+                    begin
+                    match b with
+                        | "range" ->
+                            let low = evaluate_int_expression (List.hd args) in
+                            let high = evaluate_int_expression (List.nth args 1) in
+                                ArrayExp(Array.init (high - low) (fun i ->
+                                    Some (IntValue(i+low))
+                                ) )
+                    end
+            end
                     
 and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)

@@ -35,8 +35,11 @@ let get_lval_type (l,o) gamma =
             | Index(_,o2) -> match t with
                 | Array(t2) -> modify_type t2 o2
     in
-    let t,_ = var_map_lookup l gamma in
-        modify_type t o
+    match l with
+        | "Integer" -> Int
+        | _ ->
+            let t,_ = var_map_lookup l gamma in
+                modify_type t o
 
 (* Update a VarDec to be an internal DoubleCounter type *)
 let set_double_counter exp t gamma =
@@ -176,7 +179,7 @@ let check (Program(macros,network) as p) : program =
                     | AllIn | StartIn -> Char
                 in exp.expr_type <- typ ; gamma
             (* TODO handle checking arguments at some point *)
-            | Fun(a,b,c) ->
+            | Fun(a,b,Arguments(c)) ->
                 let gamma_prime = check_lval a gamma in
                 let t = get_lval_type a gamma_prime in
                 let typ = begin match t with
@@ -188,6 +191,20 @@ let check (Program(macros,network) as p) : program =
                         begin match b with
                             | "count"
                             | "reset" -> Automata
+                        end
+                    | Int ->
+                        begin match b with
+                            | "range" ->
+                                if (List.length c) <> 2 then
+                                    raise (Var_error("Integer.range requires two arguments"))
+                                else
+                                    let at = check_exp (List.hd c) gamma_prime in
+                                    let bt = check_exp (List.nth c 1) at in
+                                    if (List.hd c).expr_type = Int then
+                                        if (List.nth c 1).expr_type = Int then
+                                            Array(Int)
+                                        else raise (Type_error "Expected type Int")
+                                    else raise (Type_error "Expected type Integer")
                         end
                 end
                 in exp.expr_type <- typ ; gamma_prime
