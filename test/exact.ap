@@ -1,8 +1,10 @@
 macro exact(String kmer) {
-    foreach(char c : kmer) {
-        c == input();
+    whenever(ALL_INPUT == input()) {
+        foreach(char c : kmer) {
+            c == input();
+        }
+        report;    
     }
-    report;
 }
 
 network(String[] kmers) {
