@@ -1,0 +1,18 @@
+macro test7(Counter c, String s) {
+    foreach(char a : s)
+        if (a == input())
+            c.count();
+}
+network () {
+    {
+        String[] sets = {"abcd","defg","ghkj"};
+        some(String s : sets) {
+            Counter cnt;
+            whenever(START_OF_INPUT == input())
+                test7(cnt,s);
+            if(cnt == 3)
+                report;
+        }
+        
+    }
+}

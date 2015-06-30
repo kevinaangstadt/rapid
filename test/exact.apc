@@ -1,0 +1,12 @@
+[
+    {
+        name: "kmers",
+        data: {
+            length: [1000000],
+            type: {
+                length: [25],
+                type: String
+            }
+        }
+    }
+]

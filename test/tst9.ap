@@ -1,0 +1,19 @@
+macro gappy(String before, String after, int low, int high) {
+    foreach(char c : before) {
+        c == input();
+    }
+    some(int i : Integer.range(low,high + 1)) {
+        foreach(int dont_care : Integer.range(0,i)) {
+            ALL_INPUT == input();
+        }
+    }
+    foreach(char c : after) {
+        c == input();
+    }
+    report;
+}
+
+network() {
+    gappy("a","bc",0,2);
+    gappy("d","ef",3,10);
+}

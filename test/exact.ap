@@ -1,0 +1,12 @@
+macro exact(String kmer) {
+    foreach(char c : kmer) {
+        c == input();
+    }
+    report;
+}
+
+network(String[] kmers) {
+    some(String kmer : kmers) {
+        exact(kmer);
+    }
+}

@@ -1,0 +1,35 @@
+macro test8() {
+    Counter cnt;
+    Counter cnt2;
+    Counter cnt3;
+    either {
+        whenever('a' == input())
+            cnt.count();
+    } orelse {
+        whenever('b' == input())
+            cnt2.count();
+    } orelse {
+        whenever('c' == input())
+            cnt3.count();
+    }
+    
+    if(cnt == 3 && cnt2 == 5 || cnt3 == 7)
+        report;
+}
+macro test8_2() {
+    Counter cnt;
+    String s = "hello";
+    foreach(char c : s) {
+        if(c == input())
+            cnt.count();
+    }
+    
+    whenever(cnt > 3)
+        report;
+    
+    if('x' == input())
+        report;
+}
+network () {
+    test8_2();
+}
