@@ -71,19 +71,23 @@ let rec add_all net (e:Automata.element) =
     let connect = Automata.get_connections e in
     if not (Automata.contains net e) then
         Automata.add_element net e ;
-        List.iter (fun (a,c) -> add_all net a) connect
+        List.iter (fun (a,c) -> add_all net a) connect.children
 
 let rec find_last elements =
-    if List.for_all (fun e -> (Automata.get_connections e) = []) elements then
+    if List.for_all (fun e -> (Automata.get_connections e).children = []) elements then
         elements
     else
         let new_es = List.fold_left (fun list e ->
-            (List.map (fun (c,_) -> c) (Automata.get_connections e)) @ list
+            (List.map (fun (c,_) -> c) (Automata.get_connections e).children) @ list
         ) [] elements in
         find_last new_es
 
 let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : string list) (label : string) : string list =
     match stmt with
+        | Debug(s) ->
+            let Variable(_,_,(Some v)) = symbol_variable_lookup s in
+            Printf.printf "%s => %s \n" s (val_to_string v) ;
+            last
         | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; last
         | Block(b) ->
             let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton) in
@@ -102,10 +106,10 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             let rec flip_symbol (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
-                let connection_list : Automata.element_connections list = match connect with
-                    | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect
+                let connection_list : Automata.element_connection list = match connect.children with
+                    | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect.children
                     | [] -> tb := StringSet.add id !tb ; [] in
-                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
+                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,(Automata.generate_connections connection_list),report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
                 begin try
                 let mapped = Hashtbl.find !abstract_mapping id in
@@ -118,18 +122,18 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             let rec add_conn (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
                 begin
                 let new_cons = List.map (fun ((Automata.STE(a_id,a_set,a_neg,a_strt,a_latch,a_connect,a_report) as a),conn) ->
-                                        ((Hashtbl.find states ("n_"^a_id)),None)) connect in
-                let old_cons = match connect with
-                    | hd :: tl -> List.map (fun (a,con) -> ((add_conn a),con)) connect
+                                        ((Hashtbl.find states ("n_"^a_id)),None)) connect.children in
+                let old_cons = match connect.children with
+                    | hd :: tl -> List.map (fun (a,con) -> ((add_conn a),con)) connect.children
                     | [] -> [] in
-                Automata.STE(id,set,neg,strt,latch,new_cons@old_cons,report)
+                Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (new_cons@old_cons)),report)
                 end in
             let rec rename (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
                 begin
-                let connection_list : Automata.element_connections list = match connect with
-                    | hd :: tl -> List.map (fun (a,conn) -> ((rename a),conn)) connect
+                let connection_list : Automata.element_connection list = match connect.children with
+                    | hd :: tl -> List.map (fun (a,conn) -> ((rename a),conn)) connect.children
                     | [] -> [] in
-                let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
+                let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,(Automata.generate_connections connection_list),report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
                 begin try
                 let mapped = Hashtbl.find !abstract_mapping id in
@@ -141,12 +145,12 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 end in
             let rec add_conn_neg (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
-                match connect with
+                match connect.children with
                     | hd :: tl -> List.iter (fun (a,con) ->
                         Automata.connect net id ("n"^(Automata.get_id a)) None ;
                         Automata.connect net ("n"^id) (Automata.get_id a) None ;
                         (add_conn_neg a)
-                        ) connect
+                        ) connect.children
                     | [] -> fb := StringSet.add ("n"^id) (StringSet.add id !fb) ; ()
                 end in
             
@@ -159,8 +163,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             (*if this is a counter experession*)
                 begin
                 (*Add in traps!*)
-                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,"\\x26",false,Automata.NotStart,false,[],false) in
-                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,"\\x26",false,Automata.NotStart,false,[],false) in
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,"\\x26",false,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,"\\x26",false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 Automata.add_element net yes_trigger ;
                 Automata.add_element net no_trigger ;
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
@@ -216,7 +220,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             match exp_return with
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
-                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, [], false) in
+                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false) in
                     Automata.add_element net spin ;
                     (*Connect spin to itself...so that it spins!*)
                     Automata.connect net (Automata.get_id spin) (Automata.get_id spin) None ;
@@ -367,8 +371,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         let num = get_num c_seed in
                         let id = Printf.sprintf "%s_%s_%d" label dec.var num in
                         let i_id = Printf.sprintf "%s_i" id in
-                        let counter = Automata.Counter(id,100,Automata.Latch,false,[]) in
-                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, []) in
+                        let counter = Automata.Counter(id,100,Automata.Latch,false,(Automata.generate_connections [])) in
+                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, (Automata.generate_connections [])) in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id ;
                         (*Hashtbl.add symbol_table dec.var (Variable(id,dec.typ,None)) ;*)
@@ -392,19 +396,19 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         let i_id2 = Printf.sprintf "%s_i" id2 in
                         let id_true = Printf.sprintf "%s_true" id1 in
                         let id_false = Printf.sprintf "%s_false" id1 in
-                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,[]) in
-                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,[]) in
-                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, []) in
-                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, []) in
+                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,(Automata.generate_connections [])) in
+                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,(Automata.generate_connections [])) in
+                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, (Automata.generate_connections [])) in
+                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, (Automata.generate_connections [])) in
                         let out_true = if is_eq then
-                            Automata.Combinatorial(AND,id_true,false,false,[])
+                            Automata.Combinatorial(AND,id_true,false,false,(Automata.generate_connections []))
                         else
-                            Automata.Combinatorial(OR,id_true,false,false,[])
+                            Automata.Combinatorial(OR,id_true,false,false,(Automata.generate_connections []))
                         in
                         let out_false = if is_eq then
-                            Automata.Combinatorial(AND,id_false,false,false,[])
+                            Automata.Combinatorial(AND,id_false,false,false,(Automata.generate_connections []))
                         else
-                            Automata.Combinatorial(OR,id_false,false,false,[])
+                            Automata.Combinatorial(OR,id_false,false,false,(Automata.generate_connections []))
                         in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id1 ;
@@ -498,11 +502,9 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
     let get_value v =
         begin
         match v.exp with
-            | Lit(CharLit(a,_)) -> a
-            | Lit(AllIn) -> Automata.all_in
-            | Lit(StartIn) -> Automata.start_in
             | Lval((n,o)) ->
                 let (Variable(name,typ,Some v)) = Hashtbl.find symbol_table n in
+                begin
                 match o with
                 | NoOffset ->
                     begin match v with
@@ -511,6 +513,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         Hashtbl.add !abstract_mapping id s ;
                         Char.chr ((Random.int 26) + 97)
                     end
+                end
+            | _ -> evaluate_char_expression v
         end in
     match exp.exp with
         | EQ(a,b) -> begin
@@ -519,13 +523,13 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     | None -> [new_element]
                     | Some x ->
                         let cons = List.map (fun a -> (a,None)) x in
-                        [Automata.STE(id,set,neg,strt,latch,cons@connect,report)]
+                        [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value b),false,Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value a),false,Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
 
             else raise (Syntax_error "Something with Input")
@@ -536,13 +540,13 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     | None -> [new_element]
                     | Some x -> 
                         let cons = List.map (fun a -> (a,None)) x in
-                        [Automata.STE(id,set,neg,strt,latch,cons@connect,report)]
+                        [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value b),true,Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value a),true,Automata.NotStart,false,[],false) in
+                let new_element = Automata.STE(id,Char.escaped (get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -556,10 +560,10 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             let rec flip_symbol (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
                 let _ = Hashtbl.add states id ste in
-                let connection_list : Automata.element_connections list = match connect with
-                    | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect
+                let connection_list : Automata.element_connection list = match connect.children with
+                    | hd :: tl -> List.map (fun (a,conn) -> ((flip_symbol a),conn)) connect.children
                     | [] -> [] in
-                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,connection_list,report) in
+                let new_ste = Automata.STE("n_"^id,set,(not neg),strt,latch,(Automata.generate_connections connection_list),report) in
                 let _ = Hashtbl.add states ("n_"^id) new_ste in
                 begin try
                 let mapped = Hashtbl.find !abstract_mapping id in
@@ -572,18 +576,18 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
             let rec add_conn (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
                 begin
                 let new_cons = List.map (fun ((Automata.STE(a_id,a_set,a_neg,a_strt,a_latch,a_connect,a_report) as a),conn) ->
-                                        ((Hashtbl.find states ("n_"^a_id)),None)) connect in
-                let old_cons = match connect with
-                    | hd :: tl -> List.map (fun (a,con) -> ((add_conn a),con)) connect
+                                        ((Hashtbl.find states ("n_"^a_id)),None)) connect.children in
+                let old_cons = match connect.children with
+                    | hd :: tl -> List.map (fun (a,con) -> ((add_conn a),con)) connect.children
                     | [] -> [] in
-                Automata.STE(id,set,neg,strt,latch,new_cons@old_cons,report)
+                Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (new_cons@old_cons)),report)
                 end in
             let rec rename (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) : Automata.element =
                 begin
-                let connection_list : Automata.element_connections list = match connect with
-                    | hd :: tl -> List.map (fun (a,conn) -> ((rename a),conn)) connect
+                let connection_list : Automata.element_connection list = match connect.children with
+                    | hd :: tl -> List.map (fun (a,conn) -> ((rename a),conn)) connect.children
                     | [] -> [] in
-                let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,connection_list,report) in
+                let new_ste = Automata.STE("nn_"^id,set,neg,strt,latch,(Automata.generate_connections connection_list),report) in
                 let _ = Hashtbl.add states ("nn_"^id) new_ste in
                 begin try
                 let mapped = Hashtbl.find !abstract_mapping id in
@@ -595,12 +599,12 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 end in
             let rec add_conn_neg (Automata.STE(id,set,neg,strt,latch,connect,report) as ste) =
                 begin
-                match connect with
+                match connect.children with
                     | hd :: tl -> List.iter (fun (a,con) ->
                         Automata.connect temp_net id ("n"^(Automata.get_id a)) None ;
                         Automata.connect temp_net ("n"^id) (Automata.get_id a) None ;
                         (add_conn_neg a)
-                        ) connect
+                        ) connect.children
                     | [] -> ()
                 end in
             (* TODO This None might actually bad...will have to consider further
@@ -625,19 +629,19 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 match start with
                     | Automata.STE(id,set,neg,strt,latch,connect,report) ->
                         begin
-                        match connect with
-                        | hd :: tl -> Automata.STE(id,set,neg,strt,latch, List.map (fun (a,s) -> ((add_to_last a x),s)) connect, report)
+                        match connect.children with
+                        | hd :: tl -> Automata.STE(id,set,neg,strt,latch, (Automata.generate_connections (List.map (fun (a,s) -> ((add_to_last a x),s)) connect.children)), report)
                         | [] ->
                             let temp = List.map (fun a -> (a,None)) x in
-                            Automata.STE(id,set,neg,strt,latch,temp,report)
+                            Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections temp),report)
                         end
                     | Automata.Combinatorial(typ,id,eod,report,connect) ->
                         begin
-                        match connect with
-                        | hd :: tl -> Automata.Combinatorial(typ, id, eod, report, List.map (fun (a,s) -> ((add_to_last a x),s)) connect)
+                        match connect.children with
+                        | hd :: tl -> Automata.Combinatorial(typ, id, eod, report,(Automata.generate_connections (List.map (fun (a,s) -> ((add_to_last a x),s)) connect.children)))
                         | [] ->
                             let temp = List.map (fun a -> (a,None)) x in
-                            Automata.Combinatorial(typ,id,eod,report,temp)
+                            Automata.Combinatorial(typ,id,eod,report,(Automata.generate_connections temp))
                         end
                         
             in
@@ -654,7 +658,7 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
             in
-            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, connect) in
+            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect)) in
             let a_eval = evaluate_expression_aut a None (Some [join]) prefix seed in
             let b_eval = evaluate_expression_aut b None (Some [join]) prefix seed in
                 a_eval@b_eval
@@ -683,20 +687,20 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, connect, false)]
+                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false)]
                 else
                 let b_eval = evaluate_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, connect, false) :: b_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false) :: b_eval
             else
                 if can_condense b then
                 let a_eval = evaluate_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, connect, false) :: a_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false) :: a_eval
                 else
                     let a_eval = evaluate_expression_aut a None s prefix seed in
                     let b_eval = evaluate_expression_aut b None s prefix seed in
@@ -803,8 +807,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,[]) in
-            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,[]) in
+            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,(Automata.generate_connections [])) in
+            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,(Automata.generate_connections [])) in
                 Automata.add_element net yes_and ;
                 Automata.add_element net no_or ;
                 Automata.connect net a_yes yes None ;
@@ -817,8 +821,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,[]) in
-            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,[]) in
+            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,(Automata.generate_connections [])) in
+            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,(Automata.generate_connections [])) in
                 Automata.add_element net yes_or ;
                 Automata.add_element net no_and ;
                 Automata.connect net a_yes yes None ;
@@ -894,6 +898,20 @@ and evaluate_char_expression exp =
                       | AllIn -> Automata.all_in
                       | StartIn -> Automata.start_in
                     end
+        | Fun((a,o),b,Arguments(args)) ->
+            (*TODO ALLOW OFFSETS!*)
+            let Variable(n,t,(Some v)) = symbol_variable_lookup a in
+                begin
+                match b with
+                    | "charAt" -> begin
+                        match v with
+                            | StringValue(s) ->
+                                let loc = evaluate_int_expression (List.hd args) in
+                                    String.get s loc
+                            | AbstractValue(s,pre) -> failwith "currently Abstract value charats not supported"
+                            (*TODO Add support for abstract values with substring*)
+                    end
+                end 
 
 and evaluate_string_expression exp =
     match exp.exp with
@@ -907,6 +925,22 @@ and evaluate_string_expression exp =
         | Lit(a) -> begin match a with
                       | StringLit(x,_) -> StringExp(x)
                     end
+        | Fun((a,o),b,Arguments(args)) ->
+            (*TODO: Allow for offsets*)
+            let Variable(n,t,(Some v)) = symbol_variable_lookup a in
+                begin
+                match b with
+                    | "sub" -> begin
+                        match v with
+                            | StringValue(s) ->
+                                let start = evaluate_int_expression (List.hd args) in
+                                let length = (evaluate_int_expression (List.nth args 1)) - start in
+                                let new_s = String.sub s start length in
+                                StringExp(new_s)
+                            | AbstractValue(s,pre) -> failwith "currently Abstract value substrings not supported"
+                            (*TODO Add support for abstract values with substring*)
+                    end
+                end
 
 (*TODO Offsets*)
 and evaluate_array_expression exp =
@@ -945,6 +979,7 @@ and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)
         let value =
             begin
             (*TODO allow for offsets*)
+            (*TODO ALLOW ARBITRARY EXPRESSIONS*)
             match arg.exp with
                 | Lval((s,o2)) ->
                     let variable = Hashtbl.find symbol_table s in
@@ -974,6 +1009,7 @@ and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)
                         | AllIn -> Some (CharValue(Automata.all_in))
                         | StartIn -> Some (CharValue(Automata.start_in))
                     end
+                | _ -> failwith (exp_to_str arg)
             end in
         let v = match value with
             | Some(v) -> v
@@ -1083,7 +1119,11 @@ let compile (Program(macros,network)) config name =
                     ) b in
                 Hashtbl.iter (fun k v ->
                     Printf.printf "%s -> %s\n" k v
-                ) !abstract_mapping ; return
+                ) !abstract_mapping ;
+                (*Minimize the automata*)
+                List.iter Automata.generate_parents return ;
+                let return2 = List.map (fun anml -> Opt.remove_dead_states anml !abstract_mapping; anml) return in
+                (return2,!abstract_mapping)
                 end
             
     (*;

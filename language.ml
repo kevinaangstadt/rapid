@@ -5,8 +5,6 @@
 
 open Util
 
-module StringSet = Set.Make(String)
-
 exception Syntax_error of string
 exception Uninitialized_variable
 exception Negative_count
@@ -95,6 +93,7 @@ type statement =
     | Assign of lval * expression
     | ExpStmt of expression 
     | MacroCall of string * arguments
+    | Debug of string
 
 type macro = Macro of string * parameters * statement
 
@@ -201,6 +200,7 @@ and statement_to_str (a : statement) = match a with
     | Assign(l,e) -> sprintf "%s = %s;\n" (lval_to_str l) (exp_to_str e)
     | MacroCall(a,b)  -> sprintf "%s(%s);\n"   a (args_to_str b)
     | ExpStmt(exp) -> sprintf "%s;\n" (exp_to_str exp)
+    | Debug(s) -> sprintf "debug(%s);\n" s
 
 and exp_to_str exp = match exp.exp with
     | EQ(a,b)       -> sprintf "(%s == %s)" (exp_to_str a) (exp_to_str b)

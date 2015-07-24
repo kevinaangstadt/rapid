@@ -69,6 +69,7 @@
 %token  <Util.loc>        TALLOF
 %token  <Util.loc>        TANDALSO
 %token  <Util.loc>        TSOME
+%token  <Util.loc>        TDEBUG
 
 %token	EOF
 
@@ -174,6 +175,10 @@ statement:
     | IDENT TLPAREN args TRPAREN TSEMICOLON {
         let name,loc = $1 in
             MacroCall(name,$3)
+    }
+    | TDEBUG TLPAREN IDENT TRPAREN TSEMICOLON {
+        let str,_ = $3 in
+        Debug(str)
     }
 ;
 

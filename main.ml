@@ -95,7 +95,7 @@ let argspec = Arg.align argspec in
         if String.length !config = 0 then []
         else read_config !config
     in
-    let anml = read_file !file config in
+    let anml,abstract_mapping = read_file !file config in
     try
         if not !merge then
             List.iteri (fun i a ->

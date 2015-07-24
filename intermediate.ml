@@ -127,9 +127,7 @@ let rec resolve_if_stmt stmt =
         | If(e,s1,s2) ->
             begin
             match e.expr_type with
-            | DoubleCounter(_) 
-            | Counter -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
-            | _ ->
+            | Automata ->
                 Either([
                     Block([
                         ExpStmt(e);
@@ -140,6 +138,7 @@ let rec resolve_if_stmt stmt =
                         (resolve_if_stmt s2)
                     ])
                 ])
+            | _ -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
             end
         | Either(stmts) -> Either(List.map resolve_if_stmt stmts)
         | SomeStmt(p,e,s1) -> SomeStmt(p,e,(resolve_if_stmt s1))

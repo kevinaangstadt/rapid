@@ -3,7 +3,7 @@
 # University of Virginia
 # Department of Computer Science
 
-OCAMLOPT  = ocamlopt
+OCAMLOPT  = ocamlopt -g
 OCAMLYACC = ocamlyacc
 OCAMLLEX  = ocamllex
 

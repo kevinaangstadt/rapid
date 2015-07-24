@@ -186,6 +186,25 @@ let check (Program(macros,network) as p) : program =
                     | String ->
                         begin match b with
                             | "length" -> Int
+                            | "charAt" ->
+                                if (List.length c) <> 1 then
+                                    raise (Var_error("[string].charAt requires one argument"))
+                                else
+                                    let at = check_exp (List.hd c) gamma_prime in
+                                    if (List.hd c).expr_type = Int then
+                                        Char
+                                    else raise (Type_error "Expected type Integer")
+                            | "sub" ->
+                                if (List.length c) <> 2 then
+                                    raise (Var_error("[string].sub requires two arguments"))
+                                else
+                                    let at = check_exp (List.hd c) gamma_prime in
+                                    let bt = check_exp (List.nth c 1) at in
+                                    if (List.hd c).expr_type = Int then
+                                        if (List.nth c 1).expr_type = Int then
+                                            String
+                                        else raise (Type_error "Expected type Int")
+                                    else raise (Type_error "Expected type Integer")
                         end
                     | Counter ->
                         begin match b with
@@ -322,6 +341,9 @@ let check (Program(macros,network) as p) : program =
                 ) gamma b params
                 with Invalid_argument(_) -> raise (Syntax_error (Printf.sprintf "invalid number of arguments in call to %s" a))
                 end
+            | Debug(s) ->
+                var_map_lookup s gamma ;
+                gamma
                 
     in
     
