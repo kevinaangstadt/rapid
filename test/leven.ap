@@ -1,0 +1,31 @@
+macro leven(String str, int d) {
+    if(d >= 0) {
+        if(str.length() > 0) {
+            String sub = str.sub(1,str.length());
+            int new_d = d - 1 ;
+            either {
+                //insertion
+                input() == ALL_INPUT;
+                leven(str, new_d);
+            } orelse {
+                //deletion
+                leven(sub, new_d);
+            } orelse {
+                //substitution
+                input() != str.charAt(0);
+                leven(sub, new_d);
+            } orelse {
+                //match
+                input() == str.charAt(0);
+                leven(sub, d);
+            }
+        }
+        else {
+            report;
+        }
+    }
+}
+
+network() {
+    leven("wahoo",1);
+}
