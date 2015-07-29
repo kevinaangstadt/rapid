@@ -30,6 +30,7 @@ rule initial = parse
     | "String"  { TSTRING(where lexbuf) }
     | "int"     { TINT(where lexbuf) }
     | "char"    { TCHAR(where lexbuf) }
+    | "bool"    { TBOOL(where lexbuf)}
     | "Counter" { TCOUNTER(where lexbuf) }
     | "macro"   { TMACRO(where lexbuf) }
     | "network" { TNETWORK(where lexbuf) }

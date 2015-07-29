@@ -35,6 +35,7 @@
 %token	<Util.loc>        TINT
 %token  <Util.loc>        TSTRING
 %token  <Util.loc>        TCHAR
+%token  <Util.loc>        TBOOL
 %token  <Util.loc>        TLIST
 %token	<Util.loc>        TCOUNTER
 %token	<Util.loc>        TMACRO
@@ -231,6 +232,7 @@ basic_typ:
     | TSTRING { String }
     | TCHAR { Char }
     | TCOUNTER { Counter }
+    | TBOOL {Boolean}
 ;
 
 either_statement:
