@@ -1096,6 +1096,10 @@ let compile (Program(macros,network)) config name =
                                     let net_back = Automata.clone net in
                                     let mapping_back = Hashtbl.copy !abstract_mapping in
                                     add_to_net n ;
+                                    (*Minimize*)
+                                    Automata.clear_parents net ;
+                                    Automata.generate_parents net ;
+                                    Opt.remove_dead_states net !abstract_mapping ;
                                     let new_blocks = Opt.get_blocks net in
                                     Printf.printf "Number of blocks needed now: %d\n" new_blocks;
                                     if new_blocks > num_blocks then
@@ -1121,6 +1125,7 @@ let compile (Program(macros,network)) config name =
                     Printf.printf "%s -> %s\n" k v
                 ) !abstract_mapping ;
                 (*Minimize the automata*)
+                List.iter Automata.clear_parents return ;
                 List.iter Automata.generate_parents return ;
                 let return2 = List.map (fun anml -> Opt.remove_dead_states anml !abstract_mapping; anml) return in
                 (return2,!abstract_mapping)
