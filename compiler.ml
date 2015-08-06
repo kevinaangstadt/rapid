@@ -268,14 +268,14 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; new_last @ return
-                    ) last s
+                    ) [] s
             | ArrayExp(a) ->
                 Array.fold_left (fun new_last (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
                     let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
-                ) last a
+                ) [] a
             | AbstractExp((range_list,abstract_typ),pre,t) ->
                 let n = match List.hd range_list with
                     | SingleValue(n) -> n
@@ -296,7 +296,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                                        
-                ) last n_array
+                ) [] n_array
                 
             (* TODO add some sort of array exp*)
             
@@ -346,6 +346,28 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 ) last n_array
             (* TODO add some sort of array exp*)
             end
+        | Assign((n,o),exp) ->
+            begin
+            match o with
+            | NoOffset ->
+                let v = evaluate_expression exp None None label (new_seed ()) in
+                let value =
+                    begin
+                    match v with
+                        | BooleanExp(b) -> Some (BooleanValue(b))
+                        | IntExp(b) -> Some (IntValue(b))
+                        | StringExp(s) -> Some (StringValue(s))
+                        | AbstractExp(s,p,_) -> Some (AbstractValue(s,p))
+                    end
+                in
+                (* TODO We need some notion of scope to remove these after the fact! *)
+                let Variable(id,typ,_) = symbol_variable_lookup n in
+                Hashtbl.add symbol_table id (Variable(id,typ,value)) ;
+                symbol_scope := StringSet.add id !symbol_scope ;
+            | _ -> failwith "array assignment not supported atm"
+            end
+            ;
+            last
         | VarDec(var) ->
             let rec gen_value init =
                 match init with

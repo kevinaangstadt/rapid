@@ -181,6 +181,10 @@ statement:
         let str,_ = $3 in
         Debug(str)
     }
+    | IDENT TASSIGN expression TSEMICOLON {
+        let str,_ = $1 in
+        Assign((str,NoOffset),$3)
+    }
 ;
 
 declaration:

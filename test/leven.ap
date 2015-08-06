@@ -27,5 +27,5 @@ macro leven(String str, int d) {
 }
 
 network() {
-    leven("wahoo",1);
+    leven("wahoo",5);
 }
