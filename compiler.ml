@@ -356,6 +356,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             | BooleanExp(b) -> Some (BooleanValue(b))
                             | IntExp(b) -> Some (IntValue(b))
                             | StringExp(s) -> Some (StringValue(s))
+                            | AbstractExp(s,p,_) -> Some (AbstractValue(s,p))
                         end
                     | ArrayInit(e) ->
                         let i_list = List.map gen_value e in
@@ -884,9 +885,20 @@ and evaluate_int_expression exp =
                       | IntLit(x,_) -> x
                     end
         | Fun((a,o),b,c) ->
-            let (Variable(n,t,(Some (StringValue(v))))) = symbol_variable_lookup a in
-                begin match b with
-                    | "length" -> String.length v
+            let (Variable(n,t,(Some value))) = symbol_variable_lookup a in
+                begin
+                match value with
+                | StringValue(v) ->
+                    begin match b with
+                        | "length" -> String.length v
+                    end
+                | AbstractValue((s,_),_) ->
+                    begin match b with
+                        | "length" ->
+                            (*TODO THIS DOESN'T WORK WELL BUT WILL DO FOR NOW*)
+                            let SingleValue(size) = List.hd s in
+                            size
+                    end
                 end
 and evaluate_char_expression exp =
     match exp.exp with
@@ -937,7 +949,12 @@ and evaluate_string_expression exp =
                                 let length = (evaluate_int_expression (List.nth args 1)) - start in
                                 let new_s = String.sub s start length in
                                 StringExp(new_s)
-                            | AbstractValue(s,pre) -> failwith "currently Abstract value substrings not supported"
+                            | AbstractValue(s,pre) ->
+                                let start = evaluate_int_expression (List.hd args) in
+                                let last = (evaluate_int_expression (List.nth args 1)) in
+                                let length = last  - start in
+                                let pre = Printf.sprintf "%s.sub(%d,%d)" pre start last in
+                                AbstractExp(([SingleValue(last-start)],StringInfo),pre,String)
                             (*TODO Add support for abstract values with substring*)
                     end
                 end
