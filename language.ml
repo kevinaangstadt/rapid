@@ -108,6 +108,10 @@ type array_type =
     | CharArray of char array
     | BooleanArray of bool array
 
+type fake_value =
+    | AbstractString of string
+    | NoValue
+
 type value =
     | StringValue of string
     | IntValue of int
@@ -115,8 +119,8 @@ type value =
     | BooleanValue of bool
     | CounterList of string list
     | ArrayValue of value option array
-    | AbstractValue of Config.size * string
-    | AbstractChar of string
+    | AbstractValue of Config.size * string * fake_value
+    | AbstractChar of string * char
     
 type container =
     | MacroContainer of macro
@@ -129,7 +133,7 @@ type exp_return =
     | CharExp of char
     | StringExp of string
     | ArrayExp of value option array
-    | AbstractExp of Config.size * string * typ
+    | AbstractExp of Config.size * string * typ * fake_value
 type symbol = (string, container) Hashtbl.t
 
 

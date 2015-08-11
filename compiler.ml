@@ -18,8 +18,8 @@ let val_to_string value =
         | CharValue(c) -> Printf.sprintf "%c" c
         | BooleanValue(b) -> Printf.sprintf "%b" b
         | CounterList(_) -> "CounterList"
-        | AbstractValue(_,s)
-        | AbstractChar(s) -> s
+        | AbstractValue(_,s,_)
+        | AbstractChar(s,_) -> s
 
 let do_tiling = ref false
 
@@ -49,6 +49,10 @@ let c_seed = new_seed ()
 let while_seed = new_seed ()
 let e_seed = new_seed ()
 let m_seed = new_seed ()
+
+(*Makes a random String of Length *)
+let make_string length =
+    String.init length (fun _ -> Char.chr ((Random.int 26) + 97))
 
 
 let evaluate_report last=
@@ -276,21 +280,21 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                 ) [] a
-            | AbstractExp((range_list,abstract_typ),pre,t) ->
-                let n = match List.hd range_list with
-                    | SingleValue(n) -> n
-                    | _ -> raise (Config_error("Ranges not supported at this time!"))
-                in
+            | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
                 Array.fold_left (fun new_last n ->
                     let new_pre = Printf.sprintf "%s_%d_" pre n in
                     begin
                     match t with
                         | String ->
-                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                            let c = match fake with
+                            | AbstractString(s) -> String.get s n
+                            | _ -> failwith "should be unreachable"
+                            in
+                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                         | Array(x) ->
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
-                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                     end ;
                     let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
                     (*remove binding*)
@@ -323,21 +327,21 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
                 ) last a
-            | AbstractExp((range_list,abstract_typ),pre,t) ->
-                let n = match List.hd range_list with
-                    | SingleValue(n) -> n
-                    | _ -> raise (Config_error("Ranges not supported at this time!"))
-                in
+            | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
                 Array.fold_left (fun last n ->
                     let new_pre = Printf.sprintf "%s[%d]" pre n in
                     begin
                     match t with
                         | String ->
-                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                            let c = match fake with
+                                | AbstractString(s) -> String.get s n
+                                | _ -> failwith "should be unreachable"
+                            in
+                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                         | Array(x) ->
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
-                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,NoValue))))
                     end ;
                     let return = evaluate_statement f last label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
@@ -357,7 +361,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         | BooleanExp(b) -> Some (BooleanValue(b))
                         | IntExp(b) -> Some (IntValue(b))
                         | StringExp(s) -> Some (StringValue(s))
-                        | AbstractExp(s,p,_) -> Some (AbstractValue(s,p))
+                        | AbstractExp(s,p,_,fake) -> Some (AbstractValue(s,p,fake))
                     end
                 in
                 (* TODO We need some notion of scope to remove these after the fact! *)
@@ -378,7 +382,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             | BooleanExp(b) -> Some (BooleanValue(b))
                             | IntExp(b) -> Some (IntValue(b))
                             | StringExp(s) -> Some (StringValue(s))
-                            | AbstractExp(s,p,_) -> Some (AbstractValue(s,p))
+                            | AbstractExp(s,p,_,fake) -> Some (AbstractValue(s,p,fake))
                         end
                     | ArrayInit(e) ->
                         let i_list = List.map gen_value e in
@@ -532,9 +536,9 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 | NoOffset ->
                     begin match v with
                     | CharValue(s) -> s
-                    | AbstractChar(s) ->
+                    | AbstractChar(s,c) ->
                         Hashtbl.add !abstract_mapping id s ;
-                        Char.chr ((Random.int 26) + 97)
+                        c
                     end
                 end
             | _ -> evaluate_char_expression v
@@ -914,12 +918,11 @@ and evaluate_int_expression exp =
                     begin match b with
                         | "length" -> String.length v
                     end
-                | AbstractValue((s,_),_) ->
+                | AbstractValue((s,_),_,_) ->
                     begin match b with
                         | "length" ->
                             (*TODO THIS DOESN'T WORK WELL BUT WILL DO FOR NOW*)
-                            let SingleValue(size) = List.hd s in
-                            size
+                            s
                     end
                 end
 and evaluate_char_expression exp =
@@ -942,7 +945,8 @@ and evaluate_char_expression exp =
                             | StringValue(s) ->
                                 let loc = evaluate_int_expression (List.hd args) in
                                     String.get s loc
-                            | AbstractValue(s,pre) -> failwith "currently Abstract value charats not supported"
+                            | AbstractValue(s,pre,fake) ->
+                                    failwith "currently Abstract value charats not supported"
                             (*TODO Add support for abstract values with substring*)
                     end
                 end 
@@ -954,7 +958,7 @@ and evaluate_string_expression exp =
                 begin
                 match v with
                     | StringValue(s) -> StringExp(s)
-                    | AbstractValue(s,pre) -> AbstractExp((s,pre,t))
+                    | AbstractValue(s,pre,fake) -> AbstractExp((s,pre,t,fake))
                 end
         | Lit(a) -> begin match a with
                       | StringLit(x,_) -> StringExp(x)
@@ -971,12 +975,16 @@ and evaluate_string_expression exp =
                                 let length = (evaluate_int_expression (List.nth args 1)) - start in
                                 let new_s = String.sub s start length in
                                 StringExp(new_s)
-                            | AbstractValue(s,pre) ->
+                            | AbstractValue(s,pre,fake) ->
                                 let start = evaluate_int_expression (List.hd args) in
                                 let last = (evaluate_int_expression (List.nth args 1)) in
                                 let length = last  - start in
                                 let pre = Printf.sprintf "%s.sub(%d,%d)" pre start last in
-                                AbstractExp(([SingleValue(last-start)],StringInfo),pre,String)
+                                let new_val = match fake with
+                                    | NoValue -> NoValue
+                                    | AbstractString(s) -> AbstractString((String.sub s start length))
+                                in
+                                AbstractExp((last-start,StringInfo),pre,String,new_val)
                             (*TODO Add support for abstract values with substring*)
                     end
                 end
@@ -989,7 +997,7 @@ and evaluate_array_expression exp =
                 begin
                 match v with
                     | ArrayValue(s) -> ArrayExp(s)
-                    | AbstractValue(s,pre) -> AbstractExp((s,pre,t))
+                    | AbstractValue(s,pre,fake) -> AbstractExp((s,pre,t,fake))
                 end
         | Fun((a,_),b,Arguments(args)) ->
             begin
@@ -1098,8 +1106,12 @@ let compile (Program(macros,network)) config name =
             (*Add params to symbol_table*)
             List.iter (fun (Param(n,t)) ->
                 try
-                    let a_val = List.assoc n config in
-                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val,n))))
+                    let ((size,_) as a_val) : size = List.assoc n config in
+                    let fake = match t with
+                        | String -> AbstractString(make_string size)
+                        | _ -> NoValue
+                    in
+                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val,n,fake))))
                 with Not_found ->
                     raise (Config_error(Printf.sprintf "No configuration provided for variable \"%s\".\n" n))
             ) params ;
@@ -1114,17 +1126,25 @@ let compile (Program(macros,network)) config name =
                             begin
                             let obj = evaluate_expression source None None "" (new_seed ()) in
                             match obj with
-                            | AbstractExp((range_list,abstract_typ),pre,t) ->
+                            | AbstractExp((range_list,abstract_typ),pre,t,fake) ->
                                 let add_to_net n =
                                     begin
                                     let new_pre = Printf.sprintf "%s[dynamic_array_index+%d]" pre n in
                                     begin
                                     match t with
                                         | String ->
-                                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre))))
+                                            let c = match fake with
+                                            | AbstractString(s) -> String.get s n
+                                            | _ -> failwith "should be unreachable"
+                                            in
+                                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                                         | Array(x) ->
-                                            let (Config.ArrayInfo(new_size)) = abstract_typ in
-                                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre))))
+                                            let (Config.ArrayInfo((new_size_int,_) as new_size)) = abstract_typ in
+                                            let fake = match x with
+                                                | String -> AbstractString(make_string new_size_int)
+                                                | _ -> fake
+                                            in
+                                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                                     end ;
                                     let return = evaluate_statement f [] "" ~start_automaton:true in
                                     (*remove binding*)
