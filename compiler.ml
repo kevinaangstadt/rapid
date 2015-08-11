@@ -50,6 +50,9 @@ let while_seed = new_seed ()
 let e_seed = new_seed ()
 let m_seed = new_seed ()
 
+(*TODO This is stupid, just doing so that the code works for paper*)
+let track_start = ref false
+
 
 let evaluate_report last=
     Automata.set_report net last true
@@ -87,10 +90,12 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
         | Debug(s) ->
             let Variable(_,_,(Some v)) = symbol_variable_lookup s in
             Printf.printf "%s => %s \n" s (val_to_string v) ;
+            if start_automaton then track_start := true ;
             last
-        | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; last
+        | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; track_start := false ; last
         | Block(b) ->
-            let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton) in
+            let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton || !track_start) in
+            track_start := false ;
             List.fold_left (fun last a ->
                 let return = evaluate_statement a last label ~start_automaton:!start_of_automaton in
                 start_of_automaton := false ;
@@ -177,7 +182,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             (*this is a regular if*)
             | AutomataExp(if_exp) ->
                 begin
-                let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+                let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+                track_start := false ;
                 List.iter (fun if_exp -> 
                     let neg_exp = flip_symbol if_exp in
                     let if_exp_mod = add_conn if_exp in
@@ -214,7 +220,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
         | Whenever(exp,stmt) ->
             begin
             let id = Printf.sprintf "%s_if_%d" label (get_num if_seed) in
-            let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+            let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+            track_start := false ;
             Printf.printf "start_of_automaton = %b\n" start_of_automaton ;
             let exp_return = evaluate_expression exp None None id (new_seed ()) in
             match exp_return with
@@ -248,7 +255,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             end
         | Either(statement_blocks) ->
             begin
-            let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+            let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+            track_start := false;
             List.fold_left( fun complete stmt ->
                 let terminals = evaluate_statement stmt last label ~start_automaton:start_of_automaton in
                 complete @ terminals
@@ -256,7 +264,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             end
         | SomeStmt((Param(name,t)),source,f) ->
             begin
-            let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+            let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+            track_start := false ;
             let obj = evaluate_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
@@ -303,7 +312,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             end
         | ForEach((Param(name,t)),source,f) ->
             begin
-            let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton) in
+            let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton || !track_start) in
+            track_start := false ;
             let obj = evaluate_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
@@ -367,6 +377,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             | _ -> failwith "array assignment not supported atm"
             end
             ;
+            if start_automaton then track_start := true ;
             last
         | VarDec(var) ->
             let rec gen_value init =
@@ -467,21 +478,23 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 Hashtbl.add symbol_table id (Variable(id,dec.typ,value)) ;
                 symbol_scope := StringSet.add id !symbol_scope ;
             ) var ;
-            
+            if start_automaton then track_start := true ;
             last (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
         (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (evaluate_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
         | MacroCall(a,Arguments(b)) -> begin
             (* Look up macro in the symbol table, make sure it is there *)
             (* TODO does this need to be error-checked? *)
-            let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+            let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+            track_start := false ;
             let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find symbol_table a in
                 (*evaluate macro*)
                 evaluate_macro m b last ~start_automaton:start_of_automaton
             end
         | ExpStmt(e) ->
             begin
-            let start_of_automaton = (Automata.is_start_empty net) || start_automaton in
+            let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
+            track_start := false ;
             match e.expr_type with
                 | Automata ->
                     
