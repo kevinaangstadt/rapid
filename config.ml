@@ -5,7 +5,7 @@
  
 type config = variable list
 and variable = string * size
-and size = range list * typ
+and size = int * typ
 and typ =
     | StringInfo
     | IntInfo

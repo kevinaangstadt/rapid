@@ -78,7 +78,10 @@ data:
 ;
 
 number:
-    | TLBRACKET number_list TRBRACKET { $2 }
+    | INT {
+        let value,_ = $1 in
+        value
+    }
 ;
 
 number_list:
