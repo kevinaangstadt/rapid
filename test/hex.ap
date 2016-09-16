@@ -1,0 +1,8 @@
+macro foo() {
+
+}
+
+network() {
+  if( '\n' == input() )
+    report;
+}

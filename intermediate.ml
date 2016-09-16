@@ -231,3 +231,6 @@ let intermediate ast =
     let ast''' = resolve ast'' resolve_exp_stmt in
         implicit_whenever ast'''
         (*ast''*)
+
+let intermediate_cpu ast =
+    implicit_whenever ast

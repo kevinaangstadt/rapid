@@ -1,3 +1,11 @@
+(**
+ * Top-level driver for RAPID compiler
+ * Kevin Angstadt
+ * University of Virginia
+ *)
+ 
+open Tc
+
 let file = ref ""
 
 let intermediate = ref ""
@@ -5,44 +13,58 @@ let intermediate = ref ""
 let set_intermediate name = intermediate := name 
 
 let process (lexbuf : Lexing.lexbuf) config =
-    (*try*)
-        let program = Parse.program Lex.initial lexbuf in
-        let program_t = Tc.check program in
-        let program_i = Intermediate.intermediate program_t in
-        (* Let's remove path from the file name and use that to name the network*)
-        let net_name =
-            let trim_front =
-                try
-                    let loc = (String.rindex !file '/') in
-                    String.sub !file (loc + 1) ((String.length !file) - (loc + 1))
-                with Not_found -> !file
-            in
-                String.map (fun c -> if c = '.' then '_' else c) trim_front
+    let program = begin
+        try
+            Parse.program Lex.initial lexbuf
+        with exn ->
+        begin
+            let curr = lexbuf.Lexing.lex_curr_p in
+            let line = curr.Lexing.pos_lnum in
+            let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
+            let tok = Lexing.lexeme lexbuf in
+            Printf.printf "Parsing Error: \n";
+            Printf.printf "line: %d\n" line ;
+            Printf.printf "column: %d\n" cnum ;
+            Printf.printf "token: %s\n" tok;
+            exit(1)
+        end 
+    end in
+    let program_t = begin
+        try
+            Tc.check program
+        with
+        (* FIXME add location information *)
+        | Type_error(str)
+        | Macro_error(str)
+        | Var_error(str) ->
+            Printf.printf "Type checking error: %s\n" str;
+            exit(2)
+        | Type_mismatch -> Printf.printf "Type checking error: type mismatch.\n";
+            exit(3)
+    end in
+    let program_i = Intermediate.intermediate program_t in
+    (* Let's remove path from the file name and use that to name the network*)
+    let net_name =
+        let trim_front =
+            try
+                let loc = (String.rindex !file '/') in
+                String.sub !file (loc + 1) ((String.length !file) - (loc + 1))
+            with Not_found -> !file
         in
-            if !intermediate = "" then
-                (*print_endline (Language.program_to_str program_i) ;*)
-                Compiler.compile program_i config net_name
-                
-                (*print_endline (Language.program_to_str program) ; *)  (**)
-            else
-                (
-                let channel = open_out (Printf.sprintf "%s" !intermediate) in
-                Printf.fprintf channel "%s" (Language.program_to_str program_i) ;
-                close_out channel ;
-                exit(0)
-                )
-    (*with exn ->
-      begin
-        let curr = lexbuf.Lexing.lex_curr_p in
-        let line = curr.Lexing.pos_lnum in
-        let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
-        let tok = Lexing.lexeme lexbuf in
-        Printf.printf "Parsing Error: \n";
-        Printf.printf "line: %d\n" line ;
-        Printf.printf "col: %d\n" cnum ;
-        Printf.printf "tok: %s\n" tok;
-        exit(-1)
-      end*)
+            String.map (fun c -> if c = '.' then '_' else c) trim_front
+    in
+        if !intermediate = "" then
+            (*print_endline (Language.program_to_str program_i) ;*)
+            Compiler.compile program_i config net_name
+            
+            (*print_endline (Language.program_to_str program) ; *)  (**)
+        else
+            (
+            let channel = open_out (Printf.sprintf "%s" !intermediate) in
+            Printf.fprintf channel "%s" (Language.program_to_str program_i) ;
+            close_out channel ;
+            exit(0)
+            )
 
 let process_config (lexbuf : Lexing.lexbuf) =
     Config_parse.config Config_lex.initial lexbuf

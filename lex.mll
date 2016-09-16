@@ -5,6 +5,34 @@
 open Parse
 open Util
 
+exception RapidLexError of string
+
+let scan_escape (char: char) : char =
+    let result = match char with
+      'n' -> '\n'
+    | 'r' -> '\r'
+    | 't' -> '\t'
+    | 'b' -> '\b'
+    | 'f' -> '\012'  (* ASCII code 12 *)
+    | 'v' -> '\011'  (* ASCII code 11 *)
+    | 'a' -> '\007'  (* ASCII code 7 *)
+    | 'e' | 'E' -> '\027'  (* ASCII code 27. This is a GCC extension *)
+    | '\'' -> '\''    
+    | '"'-> '"'     (* '"' *)
+    | '?' -> '?'
+    | '(' -> '('
+    | '{' -> '{'
+    | '[' -> '['
+    | '%' -> '%'
+    | '\\' -> '\\' 
+    | other ->
+         raise (RapidLexError (Printf.sprintf "Unrecognized escape sequence: \\%s" (String.make 1 other) ))
+   in result
+
+let scan_hex_octal_escape str =
+    let char_code = int_of_string str in
+    let result = Char.chr char_code in
+    result
 } 
 
 let blank = [' ' '\t']
@@ -88,7 +116,26 @@ rule initial = parse
     
     | '\'' (([^'\000''\'''\n''\\'] | ('\\'_))* as str) '\'' {
         let str = Lexing.lexeme lexbuf in
+          if (String.length str) < 3 then
+            begin
+              let line,col = where lexbuf in
+              Printf.printf "Empty character literal line %i col %i\n" line col ;
+              exit 1
+            end
+          else if (String.length str) = 3 then
             CHARLIT(String.get str 1, (where lexbuf))
+          else if (String.get str 1) = '\\' then
+            try
+              CHARLIT(scan_escape (String.get str 2), (where lexbuf))
+            with RapidLexError str ->
+              Printf.printf "%s\n" str ;
+              raise (RapidLexError str)
+          else if ((String.get str 2) = 'x') || ((String.get str 2) = 'o') then
+            CHARLIT(scan_hex_octal_escape (String.sub str 1 ((String.length str) - 2)), (where lexbuf))
+          else
+            let line,col = where lexbuf in
+            Printf.printf "Unrecognized character literal: %s on line %i col %i\n" str line col;
+            exit 1
     }
     
     | eof       { EOF }
