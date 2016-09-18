@@ -1,7 +1,6 @@
 %{
 (*
- * Kevin Angstadt
- * Parser for AP Language
+ * Parser for RAPID
  *)
  
  open Language
@@ -22,26 +21,26 @@
 %token  <Util.loc>        TRUE
 %token  <Util.loc>        FALSE
 
-%token	<Util.loc>        TCOMMA
-%token	<Util.loc>        TDOT
-%token	<Util.loc>        TSEMICOLON
-%token	<Util.loc>        TCOLON
-%token	<Util.loc>        TLPAREN
-%token	<Util.loc>        TRPAREN
-%token	<Util.loc>        TLBRACE
-%token	<Util.loc>        TRBRACE
+%token	 <Util.loc>        TCOMMA
+%token	 <Util.loc>        TDOT
+%token	 <Util.loc>        TSEMICOLON
+%token	 <Util.loc>        TCOLON
+%token	 <Util.loc>        TLPAREN
+%token	 <Util.loc>        TRPAREN
+%token	 <Util.loc>        TLBRACE
+%token	 <Util.loc>        TRBRACE
 %token  <Util.loc>        TLBRACKET
 %token  <Util.loc>        TRBRACKET
-%token	<Util.loc>        TINT
+%token	 <Util.loc>        TINT
 %token  <Util.loc>        TSTRING
 %token  <Util.loc>        TCHAR
 %token  <Util.loc>        TBOOL
 %token  <Util.loc>        TLIST
-%token	<Util.loc>        TCOUNTER
-%token	<Util.loc>        TMACRO
-%token	<Util.loc>        TNETWORK
-%token	<Util.loc>        TREPORT
-%token	<Util.loc>        TFILTER
+%token	 <Util.loc>        TCOUNTER
+%token	 <Util.loc>        TMACRO
+%token	 <Util.loc>        TNETWORK
+%token	 <Util.loc>        TREPORT
+%token	 <Util.loc>        TFILTER
 %token  <Util.loc>        TINPUT
 %token  <Util.loc>        TSTARTIN
 %token  <Util.loc>        TALLIN
@@ -49,26 +48,26 @@
 %token  <Util.loc>        TPLUS
 %token  <Util.loc>        TTIMES
 %token  <Util.loc>        TMOD
-%token	<Util.loc>        TASSIGN
-%token	<Util.loc>        TEQ
-%token	<Util.loc>        TNEQ
-%token	<Util.loc>        TLEQ
-%token	<Util.loc>        TGEQ
-%token	<Util.loc>        TLT
-%token	<Util.loc>        TGT
-%token	<Util.loc>        TAND
+%token	 <Util.loc>        TASSIGN
+%token	 <Util.loc>        TEQ
+%token	 <Util.loc>        TNEQ
+%token	 <Util.loc>        TLEQ
+%token	 <Util.loc>        TGEQ
+%token	 <Util.loc>        TLT
+%token	 <Util.loc>        TGT
+%token	 <Util.loc>        TAND
 %token  <Util.loc>        TPAND
-%token	<Util.loc>        TOR
-%token	<Util.loc>        TNOT
-%token	<Util.loc>        TFOREACH
-%token	<Util.loc>        TWHILE
+%token	 <Util.loc>        TOR
+%token	 <Util.loc>        TNOT
+%token	 <Util.loc>        TFOREACH
+%token	 <Util.loc>        TWHILE
 %token  <Util.loc>        TWHENEVER
-%token	<Util.loc>        TIF
-%token	<Util.loc>        TELSE
+%token	 <Util.loc>        TIF
+%token	 <Util.loc>        TELSE
 %token  <Util.loc>        TEITHER
 %token  <Util.loc>        TORELSE
-%token  <Util.loc>        TALLOF
-%token  <Util.loc>        TANDALSO
+/*%token  <Util.loc>        TALLOF
+%token  <Util.loc>        TANDALSO*/
 %token  <Util.loc>        TSOME
 %token  <Util.loc>        TDEBUG
 
@@ -88,6 +87,7 @@
 
 program:
       macro_list network EOF { Program($1,$2) }
+    | network EOF { Program([],$1) }
 ;
 
 macro_list:
@@ -165,7 +165,7 @@ statement:
     | if_statement { $1 }
     | either_statement { Either($1) }
     | some_statement { $1 }
-    | allof_statement { Allof($1) }
+    /*| allof_statement { Allof($1) }*/
     | foreach_statement { $1 }
     | while_statement { $1 }
     | whenever_statement { $1 }
@@ -248,14 +248,14 @@ orelse_list:
     | TORELSE block orelse_list { $2 :: $3 }
 ;
 
-allof_statement:
+/*allof_statement:
     | TALLOF block andalso_list { $2 :: $3 }
 ;
 
 andalso_list:
-    | /* empty */ { [] }
+    |  { [] }
     | TANDALSO block andalso_list { $2 :: $3 }
-;
+;*/
 
 if_statement:
       TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }

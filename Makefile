@@ -31,7 +31,7 @@ LANG_OBJS = \
     config_lex.cmx
 
 clean: 
-	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli config_lex.ml config_parse.ml config_parse.mli language language.exe rapidsim rapidsim.exe ocamlprof.dump prof.ml
+	$(RM) -f *.cmi *.cmx *.o *.cmo lex.ml parse.ml parse.mli config_lex.ml config_parse.ml config_parse.mli rapid rapid.exe rapidsim rapidsim.exe ocamlprof.dump prof.ml
 
 %.cmi: %.mli
 	$(OCAMLOPT) -c -p $<
@@ -46,7 +46,7 @@ clean:
 	$(OCAMLLEX) $<
 	
 language: $(LANG_OBJS) main.cmx
-	$(OCAMLOPT)  -o language unix.cmxa str.cmxa $(LANG_OBJS) main.cmx
+	$(OCAMLOPT)  -o rapid unix.cmxa str.cmxa $(LANG_OBJS) main.cmx
 	
 simulator: $(LANG_OBJS) simulate.cmx
 	$(OCAMLOPT)  -o rapidsim unix.cmxa str.cmxa $(LANG_OBJS) simulate.cmx

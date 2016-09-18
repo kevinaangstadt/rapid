@@ -1,6 +1,6 @@
 {
-(* Kevin Angstadt
- * ocamllex definition for language
+(* 
+ * ocamllex definition for RAPID
  *)
 open Parse
 open Util
@@ -95,8 +95,8 @@ rule initial = parse
     | "else"    { TELSE(where lexbuf) }
     | "either"  { TEITHER(where lexbuf) }
     | "orelse"  { TORELSE(where lexbuf) }
-    | "allof"   { TALLOF(where lexbuf) }
-    | "andalso" { TANDALSO(where lexbuf) }
+    (*| "allof"   { TALLOF(where lexbuf) }
+    | "andalso" { TANDALSO(where lexbuf) }*)
     | "some"    { TSOME(where lexbuf) }
     | "debug"   { TDEBUG(where lexbuf) }
     
