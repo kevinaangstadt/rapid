@@ -1,11 +1,16 @@
 (*
- * Kevin Angstadt
  * Represents a Micron Automaton
+ * i.e. a homogeneous automaton that also has boolean elements and counters
  *)
  
 let all_in = '*'
 
-let start_in = '@'
+let start_of_input = '\255'
+
+(*TODO this only supports checking all counters at the same time*)
+let counter_trigger_char = '\254'
+
+let start_in = start_of_input
  
 type start =
     | NotStart
@@ -359,7 +364,8 @@ let element_to_str e =
                 if set = "*" then
                     set
                 else
-                if neg then "[^" ^ set ^ "@$\\x26]"
+                if neg then
+                    Printf.sprintf "[^%s\\x%i\\x%i]" set (Char.code start_of_input) (Char.code counter_trigger_char)
                 else "[" ^ set ^ "]"
             in
             let rep_line =

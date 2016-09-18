@@ -1,4 +1,4 @@
-(* Kevin Angstadt
+(*
  * Converts to an intermediate form of Rapid
  *)
 
@@ -29,7 +29,7 @@ let rec and_or stmt =
         | ExpStmt(e) -> e_and_or e
         | _ -> false
 
-(*TODO: This does not wrok for non-equal consumes with an or inside a not
+(*TODO: This does not work for non-equal consumes with an or inside a not
   Nasal demons will occur in this case because no check is currently conducted
 *)        
 let rec resolve_exp exp =
@@ -81,7 +81,7 @@ let rec resolve_exp exp =
 
 let rec resolve_exp_stmt stmt =
     match stmt with
-        | Allof(stmts) -> Allof(List.map resolve_exp_stmt stmts)
+        (*| Allof(stmts) -> Allof(List.map resolve_exp_stmt stmts)*)
         | Block(stmts) -> Block(List.map resolve_exp_stmt stmts)
         | Either(stmts) -> Either(List.map resolve_exp_stmt stmts)
         | SomeStmt(p,e,s1) -> SomeStmt(p,resolve_exp e,(resolve_exp_stmt s1))
@@ -122,7 +122,7 @@ let rec resolve_counter_exp exp =
 
 let rec resolve_if_stmt stmt =
     match stmt with
-        | Allof(stmts) -> Allof(List.map resolve_if_stmt stmts)
+        (*| Allof(stmts) -> Allof(List.map resolve_if_stmt stmts)*)
         | Block(stmts) -> Block(List.map resolve_if_stmt stmts)
         | If(e,s1,s2) ->
             begin
@@ -195,7 +195,7 @@ let implicit_whenever (Program(macros,(Network(p,stmt))) as prog) =
     let rec exists_whenever stmt =
         match stmt with
             | Either(stmts)
-            | Allof(stmts)
+            (*| Allof(stmts)*)
             | Block(stmts) -> List.exists exists_whenever stmts
             | If(_,s1,s2) -> (exists_whenever s1) || (exists_whenever s2)
             | SomeStmt(_,_,s)

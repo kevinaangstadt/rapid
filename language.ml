@@ -1,6 +1,5 @@
 (*
- * Kevin Angstadt
- * Abstract Syntax for AP Language
+ * Abstract Syntax for RAPID
  *)
 
 open Util
@@ -85,7 +84,7 @@ type statement =
     | If of expression * statement * statement
     | Either of statement list
     | SomeStmt of param * expression * statement
-    | Allof of statement list
+    (*| Allof of statement list*)
     | ForEach of param * expression * statement
     | While of expression * statement
     | Whenever of expression * statement
@@ -186,11 +185,11 @@ and statement_to_str (a : statement) = match a with
             | hd :: tl -> sprintf "either %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s orelse %s" prev (statement_to_str s))) "" tl)
         end
     | SomeStmt(var,exp,s) -> sprintf "some( %s : %s )\n %s" (param_to_str var) (exp_to_str exp) (statement_to_str s)
-    | Allof(e) -> begin
+    (*| Allof(e) -> begin
         match e with
             | [] -> ""
             | hd :: tl -> sprintf "allof %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s andalso %s" prev (statement_to_str s))) "" tl)
-        end
+        end*)
     | If(exp,t,e) -> sprintf "if ( %s ) \n %s else \n %s" (exp_to_str exp) (statement_to_str t) (statement_to_str e)
     | While(exp,t) -> sprintf "while( %s ) \n %s" (exp_to_str exp) (statement_to_str t)
     | Whenever(exp,t) -> sprintf "whenever( %s ) \n %s" (exp_to_str exp) (statement_to_str t)

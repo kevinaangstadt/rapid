@@ -1,5 +1,4 @@
 (*
- * Kevin Angstadt
  * Type Checking functions
  *)
  

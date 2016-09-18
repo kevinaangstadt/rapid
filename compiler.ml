@@ -163,8 +163,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
             (*if this is a counter experession*)
                 begin
                 (*Add in traps!*)
-                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,"\\x26",false,Automata.NotStart,false,(Automata.generate_connections []),false) in
-                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,"\\x26",false,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 Automata.add_element net yes_trigger ;
                 Automata.add_element net no_trigger ;
                 Automata.connect net yes (Automata.get_id yes_trigger) None;

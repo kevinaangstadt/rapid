@@ -1,5 +1,4 @@
 (*
- * Kevin Angstadt
  * RAPID Optimizations
  *)
 

@@ -1,6 +1,5 @@
 (*
- * Kevin Angstadt
- * Abstract grammar for configuration lanugage
+ * Abstract grammar for configuration language
  *)
  
 type config = variable list
