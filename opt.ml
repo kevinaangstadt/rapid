@@ -26,6 +26,8 @@ let temp_compile net =
         with End_of_file -> ()
         end ;
         Unix.close_process (ic,oc) ;
+        (* Remove the temp file *)
+        Sys.remove name ;
         (Buffer.contents buff)
 
 let get_blocks net =

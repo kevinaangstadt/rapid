@@ -67,7 +67,20 @@ let process (lexbuf : Lexing.lexbuf) config =
             )
 
 let process_config (lexbuf : Lexing.lexbuf) =
-    Config_parse.config Config_lex.initial lexbuf
+    try
+        Config_parse.config Config_lex.initial lexbuf
+    with exn ->
+      begin
+        let curr = lexbuf.Lexing.lex_curr_p in
+        let line = curr.Lexing.pos_lnum in
+        let cnum = curr.Lexing.pos_cnum - curr.Lexing.pos_bol in
+        let tok = Lexing.lexeme lexbuf in
+        Printf.printf "Config Parsing Error: \n";
+        Printf.printf "line: %d\n" line ;
+        Printf.printf "col: %d\n" cnum ;
+        Printf.printf "tok: %s\n" tok;
+        exit(-1)
+      end    
       
 let read_config (name : string) =
     try
