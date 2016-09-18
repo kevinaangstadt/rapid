@@ -1,9 +1,8 @@
 (*
- * Kevin Angstadt
- * Compiler for AP Language
+ * Compiler for RAPID
  *)
  
-open Language (* Contains all the types for the AP language *)
+open Language (* Contains all the types for RAPID *)
 open Config (* Contains types for the configuration language *)
 open Id (*For counting on IDs*)
 open Util
@@ -62,16 +61,6 @@ let evaluate_report last=
 
 let is_counter exp =
     exp.expr_type = Counter
-            
-(*let is_counter_expression exp =
-    match exp with
-        | EQ(a,b)
-        | NEQ(a,b)
-        | LEQ(a,b)
-        | GEQ(a,b)
-        | LT(a,b)
-        | GT(a,b) -> is_counter a || is_counter b
-        | _ -> false*)
         
 let rec add_all net (e:Automata.element) =
     let connect = Automata.get_connections e in
@@ -88,19 +77,22 @@ let rec find_last elements =
         ) [] elements in
         find_last new_es
 
-let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : string list) (label : string) : string list =
+let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : string list) (label : string) : string list =
     match stmt with
         | Debug(s) ->
             let Variable(_,_,(Some v)) = symbol_variable_lookup s in
             Printf.printf "%s => %s \n" s (val_to_string v) ;
             if start_automaton then track_start := true ;
             last
-        | Report -> List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ; track_start := false ; last
+        | Report ->
+            List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ;
+            track_start := false ;
+            last
         | Block(b) ->
             let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton || !track_start) in
             track_start := false ;
             List.fold_left (fun last a ->
-                let return = evaluate_statement a last label ~start_automaton:!start_of_automaton in
+                let return = cgen_statement a last label ~start_automaton:!start_of_automaton in
                 start_of_automaton := false ;
                 return
             ) last b
@@ -166,7 +158,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 | If(_,_,e) -> e
                 | While(_,_) -> Block([])
             in
-            match evaluate_expression exp None None id (new_seed ()) with
+            match cgen_expression exp None None id (new_seed ()) with
             | CounterExp(c_list,n_list,yes,no) ->
             (*if this is a counter experession*)
                 begin
@@ -178,8 +170,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
                 Automata.connect net no (Automata.get_id no_trigger) None;
                 List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
-                let true_last = evaluate_statement then_clause [(Automata.get_id yes_trigger)] label in
-                let false_last = evaluate_statement else_clause [(Automata.get_id no_trigger)] label in
+                let true_last = cgen_statement then_clause [(Automata.get_id yes_trigger)] label in
+                let false_last = cgen_statement else_clause [(Automata.get_id no_trigger)] label in
                 true_last @ false_last
                 end
             (*this is a regular if*)
@@ -206,8 +198,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     if start_of_automaton then
                         Automata.set_start net (Automata.get_id if_exp_mod) Automata.Start
                 ) if_exp ;
-                let true_last = evaluate_statement then_clause (StringSet.elements !tb) label in
-                let false_last = evaluate_statement else_clause (StringSet.elements !fb) label in
+                let true_last = cgen_statement then_clause (StringSet.elements !tb) label in
+                let false_last = cgen_statement else_clause (StringSet.elements !fb) label in
                     match stmt with
                     | While(_,_) -> List.iter (fun e ->
                                     List.iter (fun s -> Automata.connect net s (Automata.get_id e) None ;
@@ -217,8 +209,8 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     | If(_,_,_) -> true_last @ false_last
                 end
             | BooleanExp(b) ->
-                if b then evaluate_statement then_clause last label
-                else evaluate_statement else_clause last label
+                if b then cgen_statement then_clause last label
+                else cgen_statement else_clause last label
             end
         | Whenever(exp,stmt) ->
             begin
@@ -226,7 +218,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
             track_start := false ;
             Printf.printf "start_of_automaton = %b\n" start_of_automaton ;
-            let exp_return = evaluate_expression exp None None id (new_seed ()) in
+            let exp_return = cgen_expression exp None None id (new_seed ()) in
             match exp_return with
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
@@ -251,17 +243,17 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     ) last ;
                     if start_of_automaton then
                         Automata.set_start net (Automata.get_id spin) Automata.Start;
-                    evaluate_statement stmt (List.map Automata.get_id end_of_exp) label
+                    cgen_statement stmt (List.map Automata.get_id end_of_exp) label
                 | CounterExp(c_list,n_list,yes,no) ->
                     List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
-                    evaluate_statement stmt [yes] label
+                    cgen_statement stmt [yes] label
             end
         | Either(statement_blocks) ->
             begin
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
             track_start := false;
             List.fold_left( fun complete stmt ->
-                let terminals = evaluate_statement stmt last label ~start_automaton:start_of_automaton in
+                let terminals = cgen_statement stmt last label ~start_automaton:start_of_automaton in
                 complete @ terminals
             ) [] statement_blocks
             end
@@ -269,7 +261,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             begin
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
             track_start := false ;
-            let obj = evaluate_expression source None None label (new_seed ()) in
+            let obj = cgen_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
                 let s = explode s in
@@ -277,14 +269,14 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
+                        let return = cgen_statement f last label ~start_automaton:start_of_automaton in
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; new_last @ return
                     ) [] s
             | ArrayExp(a) ->
                 Array.fold_left (fun new_last (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
+                    let return = cgen_statement f last label ~start_automaton:start_of_automaton in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                 ) [] a
@@ -304,7 +296,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                     end ;
-                    let return = evaluate_statement f last label ~start_automaton:start_of_automaton in
+                    let return = cgen_statement f last label ~start_automaton:start_of_automaton in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; new_last @ return
                                        
@@ -317,7 +309,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             begin
             let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton || !track_start) in
             track_start := false ;
-            let obj = evaluate_expression source None None label (new_seed ()) in
+            let obj = cgen_expression source None None label (new_seed ()) in
             match obj with
             | StringExp(s) ->
                 let s = explode s in
@@ -325,14 +317,14 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = evaluate_statement f last label ~start_automaton:!start_of_automaton in
+                        let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
                         (*remove binding*)
                         Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
                     ) last s
             | ArrayExp(a) ->
                 Array.fold_left (fun last (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = evaluate_statement f last label ~start_automaton:!start_of_automaton in
+                    let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
                 ) last a
@@ -352,7 +344,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,NoValue))))
                     end ;
-                    let return = evaluate_statement f last label ~start_automaton:!start_of_automaton in
+                    let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
                     Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
                                        
@@ -363,7 +355,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             begin
             match o with
             | NoOffset ->
-                let v = evaluate_expression exp None None label (new_seed ()) in
+                let v = cgen_expression exp None None label (new_seed ()) in
                 let value =
                     begin
                     match v with
@@ -386,7 +378,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             let rec gen_value init =
                 match init with
                     | PrimitiveInit(e) ->
-                        let v = evaluate_expression e None None label (new_seed ()) in
+                        let v = cgen_expression e None None label (new_seed ()) in
                         begin
                         match v with
                             | BooleanExp(b) -> Some (BooleanValue(b))
@@ -484,7 +476,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             if start_automaton then track_start := true ;
             last (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
-        (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (evaluate_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
+        (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (cgen_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
         | MacroCall(a,Arguments(b)) -> begin
             (* Look up macro in the symbol table, make sure it is there *)
             (* TODO does this need to be error-checked? *)
@@ -492,7 +484,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             track_start := false ;
             let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find symbol_table a in
                 (*evaluate macro*)
-                evaluate_macro m b last ~start_automaton:start_of_automaton
+                cgen_macro m b last ~start_automaton:start_of_automaton
             end
         | ExpStmt(e) ->
             begin
@@ -501,7 +493,7 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
             match e.expr_type with
                 | Automata ->
                     
-                    let (AutomataExp(e_list)) = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "%s_exp_%d" label (get_num e_seed)) (new_seed ()) in
+                    let (AutomataExp(e_list)) = cgen_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None (Printf.sprintf "%s_exp_%d" label (get_num e_seed)) (new_seed ()) in
                     let new_last = List.fold_left (fun ss e ->
                         StringSet.add (Automata.get_id e) ss
                     ) StringSet.empty (find_last e_list) in
@@ -516,26 +508,26 @@ let rec evaluate_statement ?(start_automaton=false) (stmt : statement) (last : s
                     if not (StringSet.is_empty new_last) then StringSet.elements new_last else last 
                 | _ ->
                     begin
-                    let return = evaluate_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
+                    let return = cgen_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
                     match return with
                         | BooleanExp(false) -> []
                         | _ -> last
                     end
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
-and evaluate_expression (exp : expression) (before : Automata.element list option) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
+and cgen_expression (exp : expression) (before : Automata.element list option) (s : Automata.element list option) (prefix : string) (seed : id_seed) =
     (*get the type of an expression...needed to determine how to eval the exp*)
     match exp.expr_type with
         | Boolean -> BooleanExp(evaluate_boolean_expression exp)
         | DoubleCounter(_)
         | Counter ->
          CounterExp(evaluate_counter_expression exp)
-        | Automata -> AutomataExp(evaluate_expression_aut exp before s prefix seed)
+        | Automata -> AutomataExp(cgen_expression_aut exp before s prefix seed)
         | Int -> IntExp(evaluate_int_expression exp)
         | Char -> CharExp(evaluate_char_expression exp)
         | String -> evaluate_string_expression exp
         | Array(_) -> evaluate_array_expression exp
-and evaluate_expression_aut (exp : expression) (before : Automata.element list option) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
+and cgen_expression_aut (exp : expression) (before : Automata.element list option) (s: Automata.element list option) (prefix:string) (seed:id_seed) : Automata.element list =
     (*Helper...requires type checking first or will result in a syntax error*)
     let id = Printf.sprintf "%s_%d" prefix (get_num seed) in
     let get_value v =
@@ -650,7 +642,7 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                 It should be a "last" element.  Probably have to add it in later
                 (after the fold)
             *)
-            let if_exp = evaluate_expression_aut a None None prefix seed in
+            let if_exp = cgen_expression_aut a None None prefix seed in
             List.fold_left (fun rest if_exp ->
                 let neg_exp = flip_symbol if_exp in
                 let if_exp_mod = add_conn if_exp in
@@ -684,8 +676,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         end
                         
             in
-            let b_eval = evaluate_expression_aut b None None prefix seed in
-            let a_eval = evaluate_expression_aut a None (Some b_eval) prefix seed in
+            let b_eval = cgen_expression_aut b None None prefix seed in
+            let a_eval = cgen_expression_aut a None (Some b_eval) prefix seed in
             begin
             match s with
                 | None -> a_eval
@@ -698,8 +690,8 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         | Some x -> List.map (fun a -> (a,None)) x
             in
             let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect)) in
-            let a_eval = evaluate_expression_aut a None (Some [join]) prefix seed in
-            let b_eval = evaluate_expression_aut b None (Some [join]) prefix seed in
+            let a_eval = cgen_expression_aut a None (Some [join]) prefix seed in
+            let b_eval = cgen_expression_aut b None (Some [join]) prefix seed in
                 a_eval@b_eval
         | Or(a,b) ->
             (*TODO Do we do this here, or at a later optimization stage?*)
@@ -728,21 +720,21 @@ and evaluate_expression_aut (exp : expression) (before : Automata.element list o
                         | Some x -> List.map (fun a -> (a,None)) x
                     in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false)]
                 else
-                let b_eval = evaluate_expression_aut b None s prefix seed in
+                let b_eval = cgen_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
                     in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false) :: b_eval
             else
                 if can_condense b then
-                let a_eval = evaluate_expression_aut a None s prefix seed in
+                let a_eval = cgen_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
                     in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false) :: a_eval
                 else
-                    let a_eval = evaluate_expression_aut a None s prefix seed in
-                    let b_eval = evaluate_expression_aut b None s prefix seed in
+                    let a_eval = cgen_expression_aut a None s prefix seed in
+                    let b_eval = cgen_expression_aut b None s prefix seed in
                     a_eval @ b_eval
         | Fun((a,_),b,c) ->
             begin match b with
@@ -1026,7 +1018,7 @@ and evaluate_array_expression exp =
                     end
             end
                     
-and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
+and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (args:expression list) (last:string list) =
     (* add bindings for arguments to state *)
     let s = Printf.sprintf "%s_%d" name (get_num m_seed) in
     (*back up symbol scope and create a new one*)
@@ -1086,7 +1078,7 @@ and evaluate_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)
     (* verify that we have a block; evalutate it *)
     
     let last = match stmt with
-        | Block(b) -> evaluate_statement stmt last s ~start_automaton:start_automaton
+        | Block(b) -> cgen_statement stmt last s ~start_automaton:start_automaton
     in
     (* remove those bindings again *)
     List.iter(fun (Param(p,t)) ->
@@ -1136,7 +1128,7 @@ let compile (Program(macros,network)) config name =
                     match s with
                         | SomeStmt((Param(name,t)),source,f) ->
                             begin
-                            let obj = evaluate_expression source None None "" (new_seed ()) in
+                            let obj = cgen_expression source None None "" (new_seed ()) in
                             match obj with
                             | AbstractExp((range_list,abstract_typ),pre,t,fake) ->
                                 let add_to_net n =
@@ -1158,7 +1150,7 @@ let compile (Program(macros,network)) config name =
                                             in
                                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                                     end ;
-                                    let return = evaluate_statement f [] "" ~start_automaton:true in
+                                    let return = cgen_statement f [] "" ~start_automaton:true in
                                     (*remove binding*)
                                     Hashtbl.remove symbol_table name
                                     end
@@ -1188,9 +1180,9 @@ let compile (Program(macros,network)) config name =
                                     tiling_optimizer (num_blocks) 1
                                 else
                                     Automata.clone net
-                            | _ -> evaluate_statement s [] "" ; Automata.clone net
+                            | _ -> cgen_statement s [] "" ; Automata.clone net
                             end
-                        | _ -> evaluate_statement s [] "" ; Automata.clone net
+                        | _ -> cgen_statement s [] "" ; Automata.clone net
                     ) b in
                 Hashtbl.iter (fun k v ->
                     Printf.printf "%s -> %s\n" k v
@@ -1201,9 +1193,7 @@ let compile (Program(macros,network)) config name =
                 let return2 = List.map (fun anml -> Opt.remove_dead_states anml !abstract_mapping; anml) return in
                 (return2,!abstract_mapping)
                 end
-            
-    (*;
-    Automata.set_name net name ; net*) (*;
-    let return = (Automata.network_to_str net) in
-        Printf.printf "pong\n%!" ; return*)
+
+
+
 
