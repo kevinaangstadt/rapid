@@ -18,7 +18,7 @@ RAPID is maintained by Kevin Angstadt angstadt@virginia.edu
   Languages and Operating Systems_ (ASPLOS '16). ACM, New York, NY, USA, 593-605.
   DOI: http://dx.doi.org/10.1145/2872362.2872393
 
-Quick Start:
+##Quick Start:
 ____________
 
 To build RAPID, you will need at least version 4 the OCaml compiler (building is
@@ -28,7 +28,7 @@ from www.micronautomata.com.
 
 Run `make` from within the repository to compile the prototype RAPID compiler.
 
-Basic Usage:
+##Basic Usage:
 ____________
 
 To compile a RAPID program, simply pass it to the RAPID compiler:
@@ -48,7 +48,7 @@ The RAPID compiler can merge these together into a single output file:
 
     $ ./rapid --merge program.ap
 
-Known Issues:
+##Known Issues:
 _____________
 * Counter thresholds are all checked using the same input symbol
 * Negating an OR statement currently has undefined behavior (this is also unchecked)
