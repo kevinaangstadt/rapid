@@ -39,19 +39,19 @@ To compile a RAPID program, simply pass it to the RAPID compiler:
 This will produce **a.anml** (or **#.a.anml** if there are multiple parallel
 macros in the network)
 
-The filename of the output automata can be specified by a command line argument:
+The file name of the output automata can be specified by a command line argument:
 
     $ ./rapid -o program.anml program.ap
     
 If there is are parallel macros in the the network, then multiple ANML files
-will be produced. Each of these will prepend an integer to the output filename.
+will be produced. Each of these will prepend an integer to the output file name.
 The RAPID compiler can merge these together into a single output file:
 
     $ ./rapid --merge program.ap
 
 ##Important Language Ideas and Constructs:
 
-Additonal details about the RAPID language may be found in Angstadt et al.'s
+Additional details about the RAPID language may be found in Angstadt et al.'s
 ASPLOS 2016 publication.  Some basic pointers are provided below.
 
 ###Networks and Macros
@@ -62,14 +62,13 @@ data.
 
 A `macro` is used to define "interesting" portions of the input data stream.
 Macros can be thought of as functions that define behavior. Driving forward
-computation are comparisions against the input data stream.
-
+computation are comparisons against the input data stream.
 
 ###Input Data Stream
 
 Access to the input data stream is provided through a special function:
 `input()`. A call to `input()` will return a character that can be used for
-comparision purposes. Characters are 8-bit and may be written using hex notation
+comparison purposes. Characters are 8-bit and may be written using hex notation
 (e.g. 0x40 for '@').
 
 ####Reserved Characters
@@ -88,8 +87,14 @@ to trigger the beginning of pattern matching.
 ####Special Characters
 
 You may use `ALL_INPUT == input()` to represent matching on any character being
-read from the input stream and `START_OF_INPUT == input()` to represent maching
+read from the input stream and `START_OF_INPUT == input()` to represent matching
 the start of data.
+
+###Reporting
+
+Use the `report` statement to trigger a reporting event. This will capture the
+current offset in the input data stream and the current macro allowing for
+"interesting" data to be post-processed.
 
 ###Either/Orelse Statement
 
@@ -126,11 +131,11 @@ Hamming distance macro):
 ###Whenever Statement
 
 RAPID also has built-in support for sliding window searches. This allows for a
-consise means of specifying where to begin pattern matching within the input
+concise means of specifying where to begin pattern matching within the input
 stream. For example, you may begin searching only at the start of data or after
 seeing a particular data sequence.
 
-As an exmple, one could match the word "rapid" anywhere in the data stream by
+As an example, one could match the word "rapid" anywhere in the data stream by
 performing a sliding window search starting with every input character as
 follows:
 
@@ -140,10 +145,37 @@ follows:
         report;
     }
 
+###Auto-Tuning Tessellation
+When compiling for a spatial architecture like the Automata Processor,
+producing the smallest (in terms of hardware resources) design possible is
+important. This allows for more widgets or macros to be loaded and executed in
+parallel on the device. Placement and routing algorithms, however, become less
+efficient as more hardware resources are used.
+
+We have developed an auto-tuning tessellation technique to help balance these
+two factors when developing for the AP. We leverage the AP runtime's ability to
+load several designs and execute in parallel. Loading occurs on a block level (a
+block is a subregion of the AP's spatial layout). The RAPID compiler can extract
+repeated portions of a program (for example when the same macro is applied to an
+array of strings) and compile the design once. At runtime, this design can be
+loaded repeatedly to support all of the strings in the array.
+
+An extracted design, however, might not use all of the resources within a given
+block or collection of blocks. To mitigate this, the compiler can try to use
+these resources with additional copies of the design.
+
+To use the tiling optimization, pass in the `--tiling` flag to the compiler:
+
+    $ ./rapid --tiling program.ap
+
+The compiler will output a mapping of array offsets to STE (state) identifiers
+which can be used for symbol replacement. In the future, symbol replacement will
+be handled by a runtime library.
+
 ##Current To-Do items:
 - [ ] Add additional documentation on language constructs
-- [ ] Update interpreter to current langauge specification
-- [ ] Add in driver code to allow for offloading of RAPID programs
+- [ ] Update interpreter to current language specification
+- [ ] Add in library code to allow for offloading of RAPID programs
 
 ##Known Issues:
 
