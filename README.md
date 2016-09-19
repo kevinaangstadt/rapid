@@ -62,9 +62,83 @@ data.
 
 A `macro` is used to define "interesting" portions of the input data stream.
 Macros can be thought of as functions that define behavior. Driving forward
-computation are comparisions against the input data stream. Access to the input
-data stream is provided through a special function: `input()`. A call to
-`input()` will return a character that can be used for comparision purposes.
+computation are comparisions against the input data stream.
+
+
+###Input Data Stream
+
+Access to the input data stream is provided through a special function:
+`input()`. A call to `input()` will return a character that can be used for
+comparision purposes. Characters are 8-bit and may be written using hex notation
+(e.g. 0x40 for '@').
+
+####Reserved Characters
+
+RAPID supports data streams containing hex characters 0x00 -- 0xFD. If your data
+also contains 0xFE or 0xFF characters, you may experience abnormal behavior.
+
+Hex code 0xFE is reserved for triggering counter comparisons. Currently, you
+must inject these characters into the data stream at the correct locations. In
+the future, this will be handled by a library.
+
+Hex code 0xFF is reserved for START_OF_DATA in RAPID. This is used to trigger
+the start of matching within the Network. You may use this in your data stream
+to trigger the beginning of pattern matching.
+
+####Special Characters
+
+You may use `ALL_INPUT == input()` to represent matching on any character being
+read from the input stream and `START_OF_INPUT == input()` to represent maching
+the start of data.
+
+###Either/Orelse Statement
+
+To instantiate a static number of parallel checks against the input stream, use
+an either/orelese statement. Each block in this statement is executed in
+parallel.
+
+For example, to search for both 'and' and 'or' in parallel, use:
+
+    either {
+      'a' == input();
+      'n' == input();
+      'd' == input();
+    } orelse {
+      'o' == input();
+      'r' == input();
+    }
+
+###Some Statement
+
+Suppose you have an array of strings and would like to perform parallel matches
+against the input stream using computation that includes these strings. This can
+be achieved using a `some` statement. The syntax is similar to a for-in loop in
+Java and instantiates a parallel computation for each element provided.
+
+For example, to search for all strings within a Hamming distance of 5 from any
+string in the `dna` array, the following would work (assuming you have written a
+Hamming distance macro):
+
+    some(String s : dna) {
+        hamming_distance(s,5);
+    }
+
+###Whenever Statement
+
+RAPID also has built-in support for sliding window searches. This allows for a
+consise means of specifying where to begin pattern matching within the input
+stream. For example, you may begin searching only at the start of data or after
+seeing a particular data sequence.
+
+As an exmple, one could match the word "rapid" anywhere in the data stream by
+performing a sliding window search starting with every input character as
+follows:
+
+    whenever(  ALL_INPUT == input() ) {
+        foreach(char c : "rapid")
+            c == input();
+        report;
+    }
 
 ##Current To-Do items:
 - [ ] Add additional documentation on language constructs
