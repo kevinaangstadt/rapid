@@ -120,7 +120,7 @@ let argspec = [
         ("--merge", Arg.Set merge, " Combine output into single ANML file")
     ] in
 let argspec = Arg.align argspec in
-    Arg.parse argspec (fun x -> file := x) "Usage: language [options] [input file]" ;
+    Arg.parse argspec (fun x -> file := x) "Usage: rapid [options] [input file]" ;
     if(String.length !file = 0) then
         begin
             Printf.printf "You must provide a file to compile!\n"; exit (-1)
