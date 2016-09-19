@@ -251,15 +251,15 @@ and evaluate_expression (exp : expression) (sigma : state) : (value * state) lis
                     | EQ(_,_) ->
                         begin
                         match value_a,value_b with
-                        | CharValue(_),AllInValue
-                        | AllInValue,CharValue(_) -> Printf.printf "bob" ; true
+                        (*| CharValue(_),AllInValue
+                        | AllInValue,CharValue(_) -> Printf.printf "bob" ; true*)
                         | _ -> value_a = value_b
                         end
                     | NEQ(_,_) ->
                         begin
                         match value_a,value_b with
-                        | CharValue(_),AllInValue
-                        | AllInValue,CharValue(_) -> false
+                        (*| CharValue(_),AllInValue
+                        | AllInValue,CharValue(_) -> false*)
                         | _ -> value_a <> value_b
                         end
                     | LEQ(_,_) -> value_a <= value_b
@@ -321,7 +321,7 @@ and evaluate_expression (exp : expression) (sigma : state) : (value * state) lis
                     | IntLit(i,_) -> IntValue(i)
                     | True -> BooleanValue(true)
                     | False -> BooleanValue(false)
-                    | AllIn -> AllInValue
+                    (*| AllIn -> AllInValue*)
                     | _ -> Printf.printf "failed with value: %s\n" (exp_to_str exp) ; failwith "failure"
             in
                 [(value,sigma)]
