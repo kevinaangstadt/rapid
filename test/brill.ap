@@ -1,0 +1,688 @@
+macro prevwd(String tag, String prev) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro prevtag(String tag, String prev) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro prev1or2tag(String tag, String prev) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        either {
+            // either read one more tag
+            while(' ' != input());
+            while('/' != input());
+        } orelse {
+            // don't
+            ;
+        }
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro prev1or2or3tag(String tag, String prev) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        either {
+            // either read one more tag
+            while(' ' != input());
+            while('/' != input());
+        } orelse {
+            // orelse read two more tags
+            while(' ' != input());
+            while('/' != input());
+            while(' ' != input());
+            while('/' != input());
+        } orelse {
+            // don't
+            ;
+        }
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro wdand2aft(String tag, String w1, String w2) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : w1) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        
+        // scan ahead a word
+        while(' ' != input());
+        
+        foreach(char c : w2) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        report;
+    }
+}
+
+macro wdand2tagaft(String tag, String w1, String next) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : w1) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        
+        // scan ahead a word
+        while(' ' != input());
+        //scan to tag
+        while('/' != input())
+        foreach(char c : next) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro prev1or2wd(String tag, String word) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : word) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        
+        either {
+            // scan ahead another word
+            while(' ' != input());
+        } orelse {
+            // don't
+            ;
+        }
+        
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro next1or2wd(String tag, String word) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        either {
+            // scan ahead another word
+            while(' ' != input());
+            foreach(char c : word) {
+                c == input();
+            }
+            '/' == input();
+            while(' ' != input());
+        } orelse {
+            // don't
+            foreach(char c : word) {
+                c == input();
+            }
+            '/' == input();
+            while(' ' != input());
+            // scan one more word
+            while(' ' != input());
+        }
+        report;
+    }
+}
+
+macro nexttag(String tag, String next) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : next) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro next1or2tag(String tag, String next) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        either {
+            // either read one more tag
+            while(' ' != input());
+            while('/' != input());
+            foreach(char c : next) {
+                c == input();
+            }
+            ' ' == input();
+        } orelse {
+            // don't
+            foreach(char c : next) {
+                c == input();
+            }
+            ' ' == input();
+            //scan one more word
+            while(' ' != input());
+        }
+        report;
+    }
+}
+
+macro next1or2or3tag(String tag, String next) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        either {
+            // either read one more tag
+            while(' ' != input());
+            while('/' != input());
+            foreach(char c : next) {
+                c == input();
+            }
+            ' ' == input();
+            //scan one more word
+            while(' ' != input());
+        } orelse {
+            // orelse read two more tags
+            while(' ' != input());
+            while('/' != input());
+            while(' ' != input());
+            while('/' != input());
+            foreach(char c : next) {
+                c == input();
+            }
+            ' ' == input();
+        } orelse {
+            // don't
+            foreach(char c : next) {
+                c == input();
+            }
+            ' ' == input();
+            //scan two more words
+            while(' ' != input());
+            while(' ' != input());
+        }
+        report;
+    }
+}
+
+macro nextwd(String tag, String word) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        foreach(char c : word) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        report;
+    }
+}
+
+macro wdprevtag(String tag, String word, String prev) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        foreach(char c : word) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro wdnexttag(String tag, String word, String next) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : word) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : next) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro surroundtag(String tag, String prev, String next) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : next) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro prevbigram(String tag, String prev, String prev2) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : prev2) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro nextbigram(String tag, String next, String next2) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : next) {
+            c == input();
+        }
+        ' ' == input();
+        while('/' != input());
+        foreach(char c : next2) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro curwd(String tag, String word) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : word) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro lbigram(String tag, String prev, String curr) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        foreach(char c : curr) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+macro rbigram(String tag, String curr, String next) {
+    whenever(ALL_INPUT == input()) {
+        ' ' == input();
+        foreach(char c : curr) {
+            c == input();
+        }
+        '/' == input();
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        foreach(char c : next) {
+            c == input();
+        }
+        '/' == input();
+        while(' ' != input());
+        report;
+    }
+}
+
+macro prev2tag(String tag, String prev) {
+    whenever(ALL_INPUT == input()) {
+        '/' == input();
+        foreach(char c : prev) {
+            c == input();
+        }
+        ' ' == input();
+        while(' ' != input());
+        while('/' != input());
+        foreach(char c : tag) {
+            c == input();
+        }
+        ' ' == input();
+        report;
+    }
+}
+
+network () {
+    prevtag("NN","TO");
+    prevtag("VB","PRP");
+    prev1or2tag("VBD","VBD");
+    prevtag("VBN","PRP");
+    prev1or2tag("NN","MD");
+    prevtag("VB","NNS");
+    prev1or2tag("VB","DT");
+    prevtag("VBN","NNP");
+    prev1or2or3tag("VBD","VBZ");
+    prevtag("IN","IN");
+    prev1or2or3tag("VBP","MD");
+    wdand2aft("IN","as","as");
+    prev1or2tag("VBD","VB");
+    nexttag("RB","NN");
+    prev1or2or3tag("VBP","TO");
+    prevtag("POS","PRP");
+    prevtag("NN","PRP");
+    nexttag("DT","DT");
+    nexttag("IN","VBD");
+    surroundtag("JJ","DT","IN");
+    prev1or2tag("VBD","VBP");
+    prevtag("NNS","PRP");
+    nexttag("IN","VBZ");
+    wdnexttag("PRP$","her","IN");
+    nexttag("IN","NN");
+    prevtag("VB","WP");
+    next1or2tag("IN","VB");
+    prevtag("VB","WDT");
+    prevtag("''","NNS");
+    prev1or2or3tag("VBP","VBD");
+    nexttag("RBR","NN");
+    prevtag("VBG","JJ");
+    prevtag("VB","VBD");
+    wdnexttag("PRP$","her",".");
+    next1or2tag("EX",".");
+    surroundtag("NNP","STAART","NNS");
+    surroundtag("NNP","STAART","NN");
+    prevtag("VB","JJ");
+    prevtag("VBN","WP");
+    nexttag("NNS","DT");
+    prevtag("VBZ","JJ");
+    curwd("VBN","had");
+    nextwd("VBD","by");
+    prev1or2tag("VBP","VBP");
+    prevtag("VB","IN");
+    nexttag("POS","DT");
+    curwd("VBN","said");
+    prev2tag("VBP","VB");
+    wdnexttag("RB","so","PRP");
+    prevtag("JJ","TO");
+    surroundtag("NNP","STAART","IN");
+    nexttag("NN","DT");
+    surroundtag("VBN","NN","DT");
+    nexttag("RB","NNS");
+    nexttag("RBR","NNS");
+    prev1or2tag("''","NNP");
+    prevwd("VBN","and");
+    prevbigram("VBD","VBN","CC");
+    surroundtag("JJ","JJ","IN");
+    nexttag("JJ","NNP");
+    rbigram("PRP$","her",",");
+    prevbigram("VBN","PRP","RB");
+    nexttag("EX",",");
+    surroundtag("VBN",",","DT");
+    prevtag("NN","RB");
+    surroundtag("NN","DT","NN");
+    prevtag("VBN","WDT");
+    nexttag("NN","NNP");
+    prevtag("VB","PRP$");
+    prevtag("NN","NNS");
+    nexttag("PRP$","TO");
+    prevbigram("VB","NNS","RB");
+    surroundtag("VBG","DT","IN");
+    wdnexttag("PRP$","her","RB");
+    prevwd("VBN","that");
+    prevbigram("VB","PRP","RB");
+    prevtag("VB","VBZ");
+    wdprevtag("VB","NN","have");
+    prevtag("VB","NN");
+    nexttag("RBR","IN");
+    curwd("VBN","got");
+    prevtag("RBS","IN");
+    prevtag("IN","MD");
+    surroundtag("CD","STAART",".");
+    surroundtag("VBN","NN","PRP");
+    nexttag("EX","IN");
+    surroundtag("JJ","DT",".");
+    nextwd("DT","right");
+    prevtag("POS","DT");
+    prev1or2wd("VB","have");
+    prevtag("JJ","MD");
+    surroundtag("CD","-LRB-","-RRB-");
+    next1or2or3tag("IN",".");
+    nexttag("CD","MD");
+    nexttag("JJ","VBN");
+    wdnexttag("JJ","long","IN");
+    prevbigram("NN","VB","CC");
+    prevtag("VBD","DT");
+    surroundtag("VBN","NNS","DT");
+    nexttag("DT",",");
+    prevtag("NN","VBD");
+    nexttag("CD","VBZ");
+    nexttag("JJ","VBZ");
+    surroundtag("JJ","JJ",".");
+    prevbigram("VBN","NNP","RB");
+    nexttag("IN","VBD");
+    wdnexttag("IN","as","RB");
+    lbigram("VB",",","have");
+    prevtag("NNS","RB");
+    wdnexttag("PRP$","her","DT");
+    wdnexttag("JJ","right","RB");
+    wdprevtag("IN","DT","while");
+    prevtag("VB","NNPS");
+    prevwd("NN","who");
+    surroundtag("NNP","STAART","VBZ");
+    surroundtag("IN","VBD","CC");
+    nextwd("DT","longer");
+    lbigram("RB","the","back");
+    nexttag("IN","VBP");
+    surroundtag("NNP","STAART","NNS");
+    wdand2aft("IN","As","as");
+    nextwd("IN","'s");
+    prevtag("WDT","CC");
+    curwd("JJ","further");
+    rbigram("JJ","right","to");
+    surroundtag("VBN","NN","PRP$");
+    prevtag("POS","DT");
+    wdprevtag("NNS","DT","means");
+    nextwd("RBS","of");
+    prevwd("IN","the");
+    prev1or2wd("VBP","he");
+    prevtag("VBD","IN");
+    wdnexttag("JJ","little","JJR");
+    prevwd("VBZ","the");
+    prev1or2wd("VB","be");
+    prevtag("POS","VB");
+    rbigram("''","''","''");
+    prevtag("NN","RB");
+    surroundtag("IN","VBD",".");
+    curwd("JJ","then");
+    wdprevtag("VB","NNP","have");
+    nexttag("DT","PRP");
+    nexttag("WP","NN");
+    prevbigram("VB","MD","VB");
+    surroundtag("NNP","STAART","DT");
+    prevtag("POS","WP");
+    prevtag("POS","EX");
+    surroundtag("VBN","NN","NN");
+    prevwd("NN","is");
+    lbigram("VBD","had","had");
+    surroundtag("NN","CC","DT");
+    nexttag("CD","WP");
+    wdand2tagaft("DT","that","NNS");
+    nextbigram("WDT","VBZ",",");
+    prevtag("VBD","JJ");
+    nexttag("JJ","VBD");
+    prevtag("VBN","TO");
+    surroundtag("JJ","IN","IN");
+    curwd("NN","first");
+    surroundtag("JJ","JJ",",");
+    curwd("NN","few");
+    surroundtag("NNP","STAART","NN");
+    surroundtag("NNP","STAART","JJ");
+    curwd("NNP","Federal");
+    wdnexttag("JJ","early","IN");
+    prevtag("VB","DT");
+    prev1or2tag("VBP","VBZ");
+    next1or2tag("EX","PRP");
+    rbigram("VBN","set","of");
+    prevtag("VBG","NNP");
+    prevbigram("VBD","IN","DT");
+    nextwd("VBG","room");
+    prevtag("NNS","WDT");
+    nextwd("VB","of");
+    wdnexttag("RB","so","DT");
+    nextwd("JJ","by");
+    wdnexttag("NN","future","NNS");
+    wdnexttag("JJ","right","IN");
+    prevtag("NN","MD");
+    nexttag("JJ","NNP");
+    prevtag("VBZ","PRP$");
+    rbigram("CD","one","'s");
+    wdnexttag("CD","one","VBD");
+    wdprevtag("RB","PRP$","back");
+    next1or2wd("DT","than");
+    prev1or2or3tag("NN","FW");
+    prevtag("VBD","PRP$");
+    surroundtag("VBN","NNS","PRP");
+    prev1or2wd("NN","are");
+    wdand2tagaft("NN","past","NNS");
+    nexttag("JJ","VBD");
+    wdnexttag("RB","So","PRP");
+    prevwd("NN","be");
+    curwd("NN","go");
+    surroundtag("VBG","DT",",");
+    prev1or2wd("VBP","n't");
+    prevwd("NNS","that");
+    wdprevtag("RB","DT","only");
+    nexttag("IN","MD");
+    prevtag("VBN","NNP");
+    prevtag("VBN","NNPS");
+    prevbigram("NN","JJ","CC");
+    prevtag("VB","EX");
+    prevtag("NN","RB");
+    prevtag("NNS","WP");
+    prevtag("VB","POS");
+    prevtag("VBZ","CD");
+    nexttag("DT","DT");
+    prevtag("IN","TO");
+    nexttag("RBR","TO");
+    prevbigram("JJ","MD","RB");
+    prevbigram("VB","VBD","RB");
+    wdnexttag("JJR","better","VB");
+    surroundtag("NNP","STAART","PRP");
+    nextbigram("JJ","MD","VB");
+    surroundtag("VBN","NNS","PRP$");
+    surroundtag("NN","DT","NNS");
+    rbigram("IN","up",",");
+    prevtag("JJ","MD");
+}
