@@ -1,5 +1,4 @@
 (*
- * Kevin Angstadt
  * Language Simulator
  *)
  
@@ -101,7 +100,7 @@ let print_reports sigma =
     List.iter (fun (k,v) -> Printf.printf "%d -> %d\n" k v) (List.sort (fun (k1,_) (k2,_) -> k1-k2)  output)
 
 let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
-    (*Printf.printf "%s\n" (Language.statement_to_str stmt);*)
+    (*Printf.printf "evaluating: %s\n" (Language.statement_to_str stmt);*)
     match stmt with
         | Report -> report sigma ; add_job next sigma
         | Break -> add_job (List.tl (List.tl next)) sigma
@@ -118,18 +117,12 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                         add_job (EvaluatingStatement(then_clause)::next) sigma_prime
                     else add_job (EvaluatingStatement(else_clause)::next) sigma_prime
                 ) result_list
-        | While(exp,body) ->
-            let result_list = evaluate_expression exp sigma in
-                List.iter (fun ((BooleanValue(value)),sigma_prime) ->
-                    if value then
-                        add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::next) sigma_prime
-                    else add_job next sigma_prime
-                ) result_list
         | Either(statement_blocks) ->
             List.iter (fun stmt ->
                 let sigma_prime = clone_state sigma in
                     add_job (EvaluatingStatement(stmt)::Converge::next) sigma_prime
             ) statement_blocks
+        | SomeStmt(iterVar, iter, body) -> Printf.printf "bob2" ; failwith "some not implements"
         | ForEach((Param(name,t)),source,f) ->
             (*TODO THIS COULD CAUSE A MASSIVE ERROR*)
             let [(value,sigma_prime)] = evaluate_expression source sigma in
@@ -145,6 +138,30 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                         add_job ((List.rev new_stmts) @ next) sigma
                 (*TODO Add Array iteration here*)
                 end
+        | While(exp,body) ->
+            let result_list = evaluate_expression exp sigma in
+                List.iter (fun ((BooleanValue(value)),sigma_prime) ->
+                    if value then
+                        add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::next) sigma_prime
+                    else add_job next sigma_prime
+                ) result_list
+        | Whenever(exp,body) ->
+            let result_list = evaluate_expression exp sigma in
+                List.iter (fun ((BooleanValue(value)),sigma_prime) ->
+                    add_job next sigma_prime ;
+                    let sigma_prime_prime = clone_state sigma_prime in
+                    if value then
+                    begin
+                        (*execute the body*)
+                        Printf.printf "whenever was true\n";
+                        Printf.printf "adding job: %s\n" (Language.statement_to_str body);
+                        add_job ((EvaluatingStatement(body))::(EvaluatingStatement(stmt))::[EvaluationDone]) sigma_prime_prime
+                    end
+                    else
+                        (*get ready to execute the check again*)
+                        
+                        add_job ((EvaluatingStatement(stmt)) :: [EvaluationDone]) sigma_prime_prime
+                ) result_list
         | VarDec(var) ->
             let sigma_prime = List.fold_left (fun sigma_prime dec ->
                 let value,sigma_prime_prime = match dec.typ with
@@ -162,7 +179,22 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                     sigma_prime_prime
             ) sigma var in
                 add_job next sigma_prime
-                
+        | Assign((name,o),exp) ->
+            (*TODO THIS COULD BE VERY BAD*)
+            let [(value,sigma_prime)] = evaluate_expression exp sigma in
+                (*TODO Arrays!*)
+                let (Variable(s,t,_)) = Hashtbl.find sigma_prime.memory name in
+                Hashtbl.replace sigma_prime.memory name (Variable(s,t,(Some value))) ;
+                add_job next sigma_prime
+        | ExpStmt(exp) ->
+            begin
+            let result_list = evaluate_expression exp sigma in
+                List.iter(fun (value,sigma_prime) ->
+                    match value with
+                        | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
+                        | _ -> add_job next sigma_prime
+                ) result_list
+            end
         | MacroCall(a,Arguments(args)) ->
             let names = ref [] in
             let (MacroContainer((Macro(name,Parameters(params),stmt)))) = Hashtbl.find sigma.memory a in
@@ -176,23 +208,9 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
             ) sigma params args in
                 add_job (EvaluatingStatement(stmt) :: RemoveVariables(!names) :: next) sigma_prime
 
-        | ExpStmt(exp) ->
-            begin
-            let result_list = evaluate_expression exp sigma in
-                List.iter(fun (value,sigma_prime) ->
-                    match value with
-                        | BooleanValue(b) -> if not b then raise Fail else add_job next sigma_prime
-                        | _ -> add_job next sigma_prime
-                ) result_list
-
-            end
-        | Assign((name,o),exp) ->
-            (*TODO THIS COULD BE VERY BAD*)
-            let [(value,sigma_prime)] = evaluate_expression exp sigma in
-                (*TODO Arrays!*)
-                let (Variable(s,t,_)) = Hashtbl.find sigma_prime.memory name in
-                Hashtbl.replace sigma_prime.memory name (Variable(s,t,(Some value))) ;
-                add_job next sigma_prime
+        
+        
+        | _ -> Printf.printf "Failing on:%s\n" (Language.statement_to_str stmt); failwith "didn't match"
 
 and evaluate_expression (exp : expression) (sigma : state) : (value * state) list =
     (*Printf.printf "%s\n" (Language.exp_to_str exp) ;*)
@@ -230,8 +248,20 @@ and evaluate_expression (exp : expression) (sigma : state) : (value * state) lis
                     | _ -> sigma_prime_prime
                 in
                 let value = match exp.exp with
-                    | EQ(_,_) -> value_a = value_b
-                    | NEQ(_,_) -> value_a <> value_b
+                    | EQ(_,_) ->
+                        begin
+                        match value_a,value_b with
+                        | CharValue(_),AllInValue
+                        | AllInValue,CharValue(_) -> Printf.printf "bob" ; true
+                        | _ -> value_a = value_b
+                        end
+                    | NEQ(_,_) ->
+                        begin
+                        match value_a,value_b with
+                        | CharValue(_),AllInValue
+                        | AllInValue,CharValue(_) -> false
+                        | _ -> value_a <> value_b
+                        end
                     | LEQ(_,_) -> value_a <= value_b
                     | GEQ(_,_) -> value_a >= value_b
                     | LT(_,_) -> value_a < value_b
@@ -291,6 +321,8 @@ and evaluate_expression (exp : expression) (sigma : state) : (value * state) lis
                     | IntLit(i,_) -> IntValue(i)
                     | True -> BooleanValue(true)
                     | False -> BooleanValue(false)
+                    | AllIn -> AllInValue
+                    | _ -> Printf.printf "failed with value: %s\n" (exp_to_str exp) ; failwith "failure"
             in
                 [(value,sigma)]
         | Fun((name,o),s,a) ->
@@ -362,7 +394,7 @@ let simulate (Program(macros,net)) =
     List.iteri (fun i c ->
         (*indexing starts at 1, not 0*)
         let i = i + 1 in
-        if c = '@' then
+        if c = Automata.start_of_input then
             add_job [EvaluatingNetwork]
                 { !original_sigma with
                     index=i+1;
