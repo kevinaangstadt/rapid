@@ -1,4 +1,4 @@
-@
+ÿ
 The/DT Fulton/NNP County/NNP Grand/NNP Jury/NNP said/VBD Friday/NNP an/DT investigation/NN of/IN Atlanta's/NNP recent/JJ primary/JJ election/NN produced/VBN ``/`` no/DT evidence/NN ''/'' that/IN any/DT irregularities/NNS took/VBD place/NN ./. 
 The/DT jury/NN further/RB said/VBD in/IN term-end/JJ presentments/NNS that/IN the/DT City/NNP Executive/NNP Committee/NNP ,/, which/WDT had/VBD over-all/JJ charge/NN of/IN the/DT election/NN ,/, ``/`` deserves/VBZ the/DT praise/NN and/CC thanks/NNS of/IN the/DT City/NNP of/IN Atlanta/NNP ''/'' for/IN the/DT manner/NN in/IN which/WDT the/DT election/NN was/VBD conducted/VBN ./. 
 The/DT September-October/NNP term/NN jury/NN had/VBD been/VBN charged/VBN by/IN Fulton/NNP Superior/NNP Court/NNP Judge/NNP Durwood/NNP Pye/NNP to/TO investigate/VB reports/NNS of/IN possible/JJ ``/`` irregularities/NNS ''/'' in/IN the/DT hard-fought/JJ primary/JJ which/WDT was/VBD won/VBD by/IN Mayor-nominate/NNP Ivan/NNP Allen/NNP Jr./NNP ./. 
