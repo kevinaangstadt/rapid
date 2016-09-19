@@ -67,9 +67,9 @@ data stream is provided through a special function: `input()`. A call to
 `input()` will return a character that can be used for comparision purposes.
 
 ##Current To-Do items:
-[] Add additional documentation on language constructs
-[] Update interpreter to current langauge specification
-[] Add in driver code to allow for offloading of RAPID programs
+- [ ] Add additional documentation on language constructs
+- [ ] Update interpreter to current langauge specification
+- [ ] Add in driver code to allow for offloading of RAPID programs
 
 ##Known Issues:
 
