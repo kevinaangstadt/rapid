@@ -1,8 +1,3 @@
-# AP Programming Language
-# Kevin Angstadt
-# University of Virginia
-# Department of Computer Science
-
 OCAMLOPT  = ocamlopt -g
 OCAMLYACC = ocamlyacc
 OCAMLLEX  = ocamllex
