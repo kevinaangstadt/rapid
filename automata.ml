@@ -364,13 +364,11 @@ let element_to_str e =
                 if set = "*" then
                     set
                 else
+                let c_list = Util.explode set in
+                let hex_escaped = List.fold_left (fun str x -> Printf.sprintf "%s\\x%x" str (Char.code x)) "" c_list in
                 if neg then
-                    Printf.sprintf "[^%s\\x%x\\x%x]" set (Char.code start_of_input) (Char.code counter_trigger_char)
-                else begin
-                    let c_list = Util.explode set in
-                    let hex_escaped = List.fold_left (fun str x -> Printf.sprintf "%s\\x%x" str (Char.code x)) "" c_list in
-                    "[" ^ hex_escaped ^ "]"
-                end
+                    Printf.sprintf "[^%s\\x%x\\x%x]" hex_escaped (Char.code start_of_input) (Char.code counter_trigger_char)
+                else "[" ^ hex_escaped ^ "]"
             in
             let rep_line =
                 if report then "<report-on-match/>\n" else "" in
