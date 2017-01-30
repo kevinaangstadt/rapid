@@ -557,10 +557,11 @@ and cgen_expression_aut (exp : expression) (before : Automata.element list optio
                         [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                (*FIXME getting rid of Char.escaped...not sure of the impacts of this*)
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
 
             else raise (Syntax_error "Something with Input")
