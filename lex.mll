@@ -116,6 +116,7 @@ rule initial = parse
     
     | '\'' (([^'\000''\'''\n''\\'] | ('\\'_))* as str) '\'' {
         let str = Lexing.lexeme lexbuf in
+          (* This is length 3 because of the single quotes *)
           if (String.length str) < 3 then
             begin
               let line,col = where lexbuf in
@@ -125,13 +126,14 @@ rule initial = parse
           else if (String.length str) = 3 then
             CHARLIT(String.get str 1, (where lexbuf))
           else if (String.get str 1) = '\\' then
-            try
-              CHARLIT(scan_escape (String.get str 2), (where lexbuf))
-            with RapidLexError str ->
-              Printf.printf "%s\n" str ;
-              raise (RapidLexError str)
-          else if ((String.get str 2) = 'x') || ((String.get str 2) = 'o') then
-            CHARLIT(scan_hex_octal_escape (String.sub str 1 ((String.length str) - 2)), (where lexbuf))
+            if ((String.get str 2) = 'x') || ((String.get str 2) = 'o') then
+               CHARLIT(scan_hex_octal_escape (String.sub str 1 ((String.length str) - 2)), (where lexbuf))
+            else
+             try
+               CHARLIT(scan_escape (String.get str 2), (where lexbuf))
+             with RapidLexError str ->
+               Printf.printf "%s\n" str ;
+               raise (RapidLexError str)            
           else
             let line,col = where lexbuf in
             Printf.printf "Unrecognized character literal: %s on line %i col %i\n" str line col;
