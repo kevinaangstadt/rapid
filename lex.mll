@@ -127,7 +127,10 @@ rule initial = parse
             CHARLIT(String.get str 1, (where lexbuf))
           else if (String.get str 1) = '\\' then
             if ((String.get str 2) = 'x') || ((String.get str 2) = 'o') then
-               CHARLIT(scan_hex_octal_escape (String.sub str 1 ((String.length str) - 2)), (where lexbuf))
+               begin
+               (* Convert number of format that OCaml understands *)
+               CHARLIT(scan_hex_octal_escape ("0" ^ String.sub str 2 ((String.length str) - 3)), (where lexbuf))
+               end
             else
              try
                CHARLIT(scan_escape (String.get str 2), (where lexbuf))
