@@ -575,10 +575,10 @@ and cgen_expression_aut (exp : expression) (before : Automata.element list optio
                         [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Char.escaped (get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c"(get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -700,8 +700,8 @@ and cgen_expression_aut (exp : expression) (before : Automata.element list optio
                 match c.exp with
                     | EQ(a,b)
                     | NEQ(a,b) ->
-                        if a.exp = Input then Char.escaped (get_value b)
-                        else if b.exp = Input then Char.escaped (get_value a)
+                        if a.exp = Input then Printf.sprintf "%c" (get_value b)
+                        else if b.exp = Input then Printf.sprintf "%c" (get_value a)
                         else raise (Syntax_error "Input is messed up")
                     | Or(a,b) -> (build_charset a) ^ (build_charset b)
                     | _ -> ""
