@@ -76,26 +76,34 @@ let rec find_last elements =
             (List.map (fun (c,_) -> c) (Automata.get_connections e).children) @ list
         ) [] elements in
         find_last new_es
-
-let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : string list) (label : string) : string list =
+(* return (outputs, breaks) *)
+let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break) : string list * string list) (label : string) : string list * string list =
     match stmt with
         | Debug(s) ->
             let Variable(_,_,(Some v)) = symbol_variable_lookup s in
             Printf.printf "%s => %s \n" s (val_to_string v) ;
             if start_automaton then track_start := true ;
-            last
+            (last, break)
         | Report ->
             List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ;
             track_start := false ;
-            last
+            (last, break)
+        | Break ->
+            let brk = List.fold_left (fun brk s->
+                    let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections [])) in
+                    Automata.add_element net inv;
+                    Automata.connect net s (Automata.get_id inv) ;
+                    (Automata.get_id inv) :: brk
+                ) [] last in
+            (last,brk)
         | Block(b) ->
             let start_of_automaton = ref ((Automata.is_start_empty net) || start_automaton || !track_start) in
             track_start := false ;
-            List.fold_left (fun last a ->
-                let return = cgen_statement a last label ~start_automaton:!start_of_automaton in
+            List.fold_left (fun (last,b) a ->
+                let (return,brk) = cgen_statement a (last, b) label ~start_automaton:!start_of_automaton in
                 start_of_automaton := false ;
-                return
-            ) last b
+                (return,brk)
+            ) (last,break) b
         | If(exp,then_clause,_)
         | While(exp,then_clause) ->
             begin
@@ -170,9 +178,9 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
                 Automata.connect net no (Automata.get_id no_trigger) None;
                 List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
-                let true_last = cgen_statement then_clause [(Automata.get_id yes_trigger)] label in
-                let false_last = cgen_statement else_clause [(Automata.get_id no_trigger)] label in
-                true_last @ false_last
+                let (true_last,b1) = cgen_statement then_clause ([(Automata.get_id yes_trigger)], break) label in
+                let (false_last,b2) = cgen_statement else_clause ([(Automata.get_id no_trigger)], break) label in
+                (true_last @ false_last, b1@b2)
                 end
             (*this is a regular if*)
             | AutomataExp(if_exp) ->
@@ -198,19 +206,19 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                     if start_of_automaton then
                         Automata.set_start net (Automata.get_id if_exp_mod) Automata.Start
                 ) if_exp ;
-                let true_last = cgen_statement then_clause (StringSet.elements !tb) label in
-                let false_last = cgen_statement else_clause (StringSet.elements !fb) label in
+                let (true_last,b1) = cgen_statement then_clause ((StringSet.elements !tb),break) label in
+                let (false_last,b2) = cgen_statement else_clause ((StringSet.elements !fb), break) label in
                     match stmt with
                     | While(_,_) -> List.iter (fun e ->
                                     List.iter (fun s -> Automata.connect net s (Automata.get_id e) None ;
                                                         Automata.connect net s ("n_"^(Automata.get_id e)) None
                                                         ) true_last
-                                    ) if_exp ; (*true_last @*) false_last
-                    | If(_,_,_) -> true_last @ false_last
+                                    ) if_exp ; (*true_last @*) (false_last, b1@b2)
+                    | If(_,_,_) -> (true_last @ false_last, b1@b2)
                 end
             | BooleanExp(b) ->
-                if b then cgen_statement then_clause last label
-                else cgen_statement else_clause last label
+                if b then cgen_statement then_clause (last, break) label
+                else cgen_statement else_clause (last, break) label
             end
         | Whenever(exp,stmt) ->
             begin
@@ -223,9 +231,11 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
                     let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false) in
-                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and"^id, false, false, (Automata.generate_connections [])) in
-                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and"^id, false, false, (Automata.generate_connections [])) in
+                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and_"^id, false, false, (Automata.generate_connections [])) in
+                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and_"^id, false, false, (Automata.generate_connections [])) in
                     Automata.add_element net spin ;
+                    Automata.add_element net spin_and;
+                    Automata.add_element net exp_and;
                     (*Connect spin to itself...so that it spins!*)
                     Automata.connect net (Automata.get_id spin) (Automata.get_id spin_and) None ;
                     Automata.connect net (Automata.get_id spin_and) (Automata.get_id spin) None ;
@@ -249,25 +259,24 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                         Automata.set_start net (Automata.get_id spin) Automata.Start;
                     (* Add in body of whenever *)
                     (* This returns back our last set; remove the breaks *)
-                    let out = cgen_statement stmt (List.map Automata.get_id end_of_exp) label in
-                    let breaks = List.filter (fun i -> (String.sub i 0 6) = "break_") out in
+                    let out,brk = cgen_statement stmt ((List.map Automata.get_id end_of_exp), break) label in
                         List.iter (fun id ->
                             Automata.connect net id (Automata.get_id exp_and) None;
                             Automata.connect net id (Automata.get_id spin_and) None;
-                        ) breaks ;
-                        List.filter (fun i -> (String.sub i 0 6) <> "break_") out
+                        ) brk ;
+                        (out, [])
                 | CounterExp(c_list,n_list,yes,no) ->
                     List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
-                    cgen_statement stmt [yes] label
+                    cgen_statement stmt ([yes],break) label
             end
         | Either(statement_blocks) ->
             begin
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
             track_start := false;
-            List.fold_left( fun complete stmt ->
-                let terminals = cgen_statement stmt last label ~start_automaton:start_of_automaton in
-                complete @ terminals
-            ) [] statement_blocks
+            List.fold_left( fun (complete,b) stmt ->
+                let terminals,brk = cgen_statement stmt (last,break) label ~start_automaton:start_of_automaton in
+                (complete @ terminals, b@brk)
+            ) ([],[]) statement_blocks
             end
         | SomeStmt((Param(name,t)),source,f) ->
             begin
@@ -277,24 +286,24 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
             match obj with
             | StringExp(s) ->
                 let s = explode s in
-                    List.fold_left (fun new_last c ->
+                    List.fold_left (fun (new_last,b) c ->
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = cgen_statement f last label ~start_automaton:start_of_automaton in
+                        let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                         (*remove binding*)
-                        Hashtbl.remove symbol_table name ; new_last @ return
-                    ) [] s
+                        Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk)
+                    ) ([],[]) s
             | ArrayExp(a) ->
-                Array.fold_left (fun new_last (Some c) ->
+                Array.fold_left (fun (new_last, b) (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = cgen_statement f last label ~start_automaton:start_of_automaton in
+                    let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; new_last @ return
-                ) [] a
+                    Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk )
+                ) ([],[]) a
             | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
-                Array.fold_left (fun new_last n ->
+                Array.fold_left (fun (new_last,b) n ->
                     let new_pre = Printf.sprintf "%s_%d_" pre n in
                     begin
                     match t with
@@ -308,11 +317,11 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                     end ;
-                    let return = cgen_statement f last label ~start_automaton:start_of_automaton in
+                    let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; new_last @ return
+                    Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk)
                                        
-                ) [] n_array
+                ) ([],[]) n_array
                 
             (* TODO add some sort of array exp*)
             
@@ -325,24 +334,24 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
             match obj with
             | StringExp(s) ->
                 let s = explode s in
-                    List.fold_left (fun last c ->
+                    List.fold_left (fun (last, b) c ->
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
                         Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                        let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
+                        let return,brk = cgen_statement f (last, b) label ~start_automaton:!start_of_automaton in
                         (*remove binding*)
-                        Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
-                    ) last s
+                        Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return, brk)
+                    ) (last,break) s
             | ArrayExp(a) ->
-                Array.fold_left (fun last (Some c) ->
+                Array.fold_left (fun (last, b) (Some c) ->
                     Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
-                    let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
+                    let return,brk = cgen_statement f (last, b) label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
-                ) last a
+                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return,brk)
+                ) (last,break) a
             | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
-                Array.fold_left (fun last n ->
+                Array.fold_left (fun (last,b) n ->
                     let new_pre = Printf.sprintf "%s[%d]" pre n in
                     begin
                     match t with
@@ -356,11 +365,11 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,NoValue))))
                     end ;
-                    let return = cgen_statement f last label ~start_automaton:!start_of_automaton in
+                    let return,brk = cgen_statement f (last,b) label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; return
+                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return, brk)
                                        
-                ) last n_array
+                ) (last,break) n_array
             (* TODO add some sort of array exp*)
             end
         | Assign((n,o),exp) ->
@@ -385,7 +394,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
             end
             ;
             if start_automaton then track_start := true ;
-            last
+            (last, break)
         | VarDec(var) ->
             let rec gen_value init =
                 match init with
@@ -486,7 +495,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                 symbol_scope := StringSet.add id !symbol_scope ;
             ) var ;
             if start_automaton then track_start := true ;
-            last (*TODO OMG this will not work correctly.  So much error checking needed*)
+            (last, break) (*TODO OMG this will not work correctly.  So much error checking needed*)
             end
         (*| ExpStmt(e,scope) -> match e with None -> () | Some x -> Automata.add_element net (cgen_expression x None)*) (*TODO check to see if the expression is allowed as a statement*)
         | MacroCall(a,Arguments(b)) -> begin
@@ -496,7 +505,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
             track_start := false ;
             let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find symbol_table a in
                 (*evaluate macro*)
-                cgen_macro m b last ~start_automaton:start_of_automaton
+                (*FIXME break can't go over macro bound*)
+                (cgen_macro m b last ~start_automaton:start_of_automaton, [])
             end
         | ExpStmt(e) ->
             begin
@@ -517,13 +527,13 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                     List.iter (fun e1 ->
                         List.iter (fun e2 -> Automata.connect net e1 (Automata.get_id e2) None ) e_list
                     ) last ;
-                    if not (StringSet.is_empty new_last) then StringSet.elements new_last else last 
+                    if not (StringSet.is_empty new_last) then (StringSet.elements new_last, break) else (last, break)
                 | _ ->
                     begin
                     let return = cgen_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
                     match return with
-                        | BooleanExp(false) -> []
-                        | _ -> last
+                        | BooleanExp(false) -> ([], break)
+                        | _ -> (last, break)
                     end
             end
         | _ -> Printf.printf "Oh goodness! %s" (statement_to_str stmt) ; raise (Syntax_error "unimplemented method")
@@ -1091,7 +1101,8 @@ and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (a
     (* verify that we have a block; evalutate it *)
     
     let last = match stmt with
-        | Block(b) -> cgen_statement stmt last s ~start_automaton:start_automaton
+        | Block(b) -> let (l,_) = cgen_statement stmt (last,[]) s ~start_automaton:start_automaton in
+                        l
     in
     (* remove those bindings again *)
     List.iter(fun (Param(p,t)) ->
@@ -1163,7 +1174,8 @@ let compile (Program(macros,network)) config name =
                                             in
                                             Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                                     end ;
-                                    let return = cgen_statement f [] "" ~start_automaton:true in
+                                    (* FIXME is throwing away break correct? *)
+                                    let (return,_) = cgen_statement f ([],[]) "" ~start_automaton:true in
                                     (*remove binding*)
                                     Hashtbl.remove symbol_table name
                                     end
@@ -1193,9 +1205,9 @@ let compile (Program(macros,network)) config name =
                                     tiling_optimizer (num_blocks) 1
                                 else
                                     Automata.clone net
-                            | _ -> cgen_statement s [] "" ; Automata.clone net
+                            | _ -> cgen_statement s ([],[]) "" ; Automata.clone net
                             end
-                        | _ -> cgen_statement s [] "" ; Automata.clone net
+                        | _ -> cgen_statement s ([],[]) "" ; Automata.clone net
                     ) b in
                 Hashtbl.iter (fun k v ->
                     Printf.printf "%s -> %s\n" k v
