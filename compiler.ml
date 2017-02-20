@@ -223,13 +223,17 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
                     let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false) in
+                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and"^id, false, false, (Automata.generate_connections [])) in
+                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and"^id, false, false, (Automata.generate_connections [])) in
                     Automata.add_element net spin ;
                     (*Connect spin to itself...so that it spins!*)
-                    Automata.connect net (Automata.get_id spin) (Automata.get_id spin) None ;
+                    Automata.connect net (Automata.get_id spin) (Automata.get_id spin_and) None ;
+                    Automata.connect net (Automata.get_id spin_and) (Automata.get_id spin) None ;
+                    Automata.connect net (Automata.get_id spin) (Automata.get_id exp_and) None ;
                     List.iter (fun e ->
                         add_all net e ;
                         (*Add connections from the spin guard to the exp guard*)
-                        Automata.connect net (Automata.get_id spin) (Automata.get_id e) None ;
+                        Automata.connect net (Automata.get_id exp_and) (Automata.get_id e) None ;
                         if start_of_automaton then
                             Automata.set_start net (Automata.get_id e) Automata.Start
                     ) e_list ;
@@ -243,7 +247,15 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) (last : strin
                     ) last ;
                     if start_of_automaton then
                         Automata.set_start net (Automata.get_id spin) Automata.Start;
-                    cgen_statement stmt (List.map Automata.get_id end_of_exp) label
+                    (* Add in body of whenever *)
+                    (* This returns back our last set; remove the breaks *)
+                    let out = cgen_statement stmt (List.map Automata.get_id end_of_exp) label in
+                    let breaks = List.filter (fun i -> (String.sub i 0 6) = "break_") out in
+                        List.iter (fun id ->
+                            Automata.connect net id (Automata.get_id exp_and) None;
+                            Automata.connect net id (Automata.get_id spin_and) None;
+                        ) breaks ;
+                        List.filter (fun i -> (String.sub i 0 6) <> "break_") out
                 | CounterExp(c_list,n_list,yes,no) ->
                     List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
                     cgen_statement stmt [yes] label

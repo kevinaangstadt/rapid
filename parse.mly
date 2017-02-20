@@ -62,6 +62,7 @@
 %token	 <Util.loc>        TFOREACH
 %token	 <Util.loc>        TWHILE
 %token  <Util.loc>        TWHENEVER
+%token  <Util.loc>        TBREAK
 %token	 <Util.loc>        TIF
 %token	 <Util.loc>        TELSE
 %token  <Util.loc>        TEITHER
@@ -277,6 +278,10 @@ while_statement:
 whenever_statement:
       TWHENEVER TLPAREN expression TRPAREN statement { Whenever($3,$5) }
 ;
+
+whenever_body:
+      statement                     { $1 }
+    | TBREAK TSEMICOLON             { Break }
 
 expression_statement:
       expression TSEMICOLON { ExpStmt($1) }
