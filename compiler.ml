@@ -92,7 +92,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             let brk = List.fold_left (fun brk s->
                     let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections [])) in
                     Automata.add_element net inv;
-                    Automata.connect net s (Automata.get_id inv) ;
+                    Automata.connect net s (Automata.get_id inv) None ;
                     (Automata.get_id inv) :: brk
                 ) [] last in
             (last,brk)

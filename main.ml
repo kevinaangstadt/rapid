@@ -84,7 +84,7 @@ let process (lexbuf : Lexing.lexbuf) config =
             Printf.printf "column: %d\n" cnum ;
             Printf.printf "token: %s\n" tok;
             exit(1)
-        end 
+        end
     end in
     let program_t = begin
         try

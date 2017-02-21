@@ -172,6 +172,7 @@ statement:
     | whenever_statement { $1 }
     | block { $1 }
     | TREPORT TSEMICOLON { Report }
+    | TBREAK TSEMICOLON { Break }
     | declaration TSEMICOLON { $1 }
     | expression_statement { $1 }
     | IDENT TLPAREN args TRPAREN TSEMICOLON {
@@ -278,10 +279,6 @@ while_statement:
 whenever_statement:
       TWHENEVER TLPAREN expression TRPAREN statement { Whenever($3,$5) }
 ;
-
-whenever_body:
-      statement                     { $1 }
-    | TBREAK TSEMICOLON             { Break }
 
 expression_statement:
       expression TSEMICOLON { ExpStmt($1) }
