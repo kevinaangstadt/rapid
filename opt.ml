@@ -43,9 +43,9 @@ let remove_dead_states (net:Automata.network ref) abstract_mapping =
     let visited = ref StringSet.empty in
     let rec remove_state e =
         match e with
-            | Automata.STE(_,_,_,_,_,conn,rpt)
-            | Automata.Combinatorial(_,_,_,rpt,conn)
-            | Automata.Counter(_,_,_,rpt,conn) ->
+            | Automata.STE(_,_,_,_,_,conn,rpt,_)
+            | Automata.Combinatorial(_,_,_,rpt,conn,_)
+            | Automata.Counter(_,_,_,rpt,conn,_) ->
                 begin
                     match conn.children with
                         | [] when not rpt ->
@@ -53,9 +53,9 @@ let remove_dead_states (net:Automata.network ref) abstract_mapping =
                             List.iter (fun id ->
                                 let parent = Hashtbl.find (!net).states id in
                                 match parent with
-                                    | Automata.STE(_,_,_,_,_,conn,_)
-                                    | Automata.Combinatorial(_,_,_,_,conn)
-                                    | Automata.Counter(_,_,_,_,conn) ->
+                                    | Automata.STE(_,_,_,_,_,conn,_,_)
+                                    | Automata.Combinatorial(_,_,_,_,conn,_)
+                                    | Automata.Counter(_,_,_,_,conn,_) ->
                                         conn.children <- List.filter (fun (e2,_) -> (Automata.get_id e2) <> id_to_remove) conn.children
                             ) conn.parents ;
                             Hashtbl.remove (!net).states id_to_remove;

@@ -11,6 +11,8 @@ exception Var_error of string
 
 module StringMap = Map.Make(String)
 
+let expr_id_seed = Id.new_seed ()
+
 let macro_map : (string, param list) Hashtbl.t = Hashtbl.create 255
 
 let macro_map_lookup m =
@@ -87,6 +89,7 @@ let set_double_counter exp t gamma =
  * annotated AST with types for all of the expressions *)
 let check (Program(macros,network) as p) : program =    
     (* Recursively check the type of an expression
+     * Also set the ID for the AST node
      * The returned value is an expression with the appropriate
      * type annotation
      *)
@@ -256,10 +259,10 @@ let check (Program(macros,network) as p) : program =
     
     (* Recursive checker for statements...returns new Statement with type annotations*)
     let rec check_statement stmt gamma : environment =
-        match stmt with
+        match stmt.stmt with
             | Report -> gamma
             | Break -> gamma
-            | Block(stmts) ->
+            | Block(stmts) -> 
                 let _ = List.fold_left (fun gamma_prime s -> check_statement s gamma_prime) gamma stmts in
                 gamma
             | If(exp,s1,_)
@@ -267,7 +270,7 @@ let check (Program(macros,network) as p) : program =
             | Whenever(exp,s1)->
                 let exp_t = check_exp exp gamma in
                 let s1_t = check_statement s1 exp_t  in
-                begin match stmt with
+                begin match stmt.stmt with
                     | If(_,_,s2) -> check_statement s2 s1_t
                     | Whenever(_,_) ->
                         begin
@@ -281,7 +284,7 @@ let check (Program(macros,network) as p) : program =
                 end
             | Either(stmts) ->
                 List.iter(fun block ->
-                    match block with
+                    match block.stmt with
                      | Block(_) -> check_statement block gamma ; ()
                      | _ -> raise (Syntax_error "An either or orelse token must be followed by a block")
                 ) stmts ; gamma
@@ -365,7 +368,7 @@ let check (Program(macros,network) as p) : program =
                         StringMap.add s (t,None) gamma_prime
             ) var_map params
             in
-            match stmt with
+            match stmt.stmt with
                 | Block(_) -> check_statement stmt gamma
                 | _ -> raise (Syntax_error "A block must follow a macro declaration")
             end
@@ -383,7 +386,7 @@ let check (Program(macros,network) as p) : program =
                     | Counter -> raise (Type_error "Counters cannot be passed to a network")
                     | _ -> StringMap.add n (typ,None) gamma_prime
             ) gamma p in
-        match stmt with
+        match stmt.stmt with
             | Block(_) -> check_statement stmt (verify_network_params params var_map)
             | _ -> raise (Syntax_error "A block must follow the network declaration.")
     in

@@ -11,13 +11,13 @@ testap: language simulator
 	test/testap.sh
 
 LANG_OBJS = \
+	id.cmx \
 	util.cmx \
     config.cmx \
 	automata.cmx \
 	language.cmx \
 	intermediate.cmx \
 	tc.cmx \
-	id.cmx \
     opt.cmx \
 	compiler.cmx \
 	parse.cmx \

@@ -22,7 +22,7 @@ let rec and_or stmt =
         | Or(_,_) -> true
         | _ -> false
     in
-    match stmt with
+    match stmt.stmt with
         | Block(stmts) 
         | Either(stmts) -> List.exists and_or stmts
         | While(e,s1) -> and_or s1
@@ -80,15 +80,15 @@ let rec resolve_exp exp =
         | _ -> exp
 
 let rec resolve_exp_stmt stmt =
-    match stmt with
+    match stmt.stmt with
         (*| Allof(stmts) -> Allof(List.map resolve_exp_stmt stmts)*)
-        | Block(stmts) -> Block(List.map resolve_exp_stmt stmts)
-        | Either(stmts) -> Either(List.map resolve_exp_stmt stmts)
-        | SomeStmt(p,e,s1) -> SomeStmt(p,resolve_exp e,(resolve_exp_stmt s1))
-        | ForEach(p,e,s1) -> ForEach(p,resolve_exp e,(resolve_exp_stmt s1))
-        | Whenever(e,s1) -> Whenever(resolve_exp e,(resolve_exp_stmt s1))
-        | While(e,s1) -> While(resolve_exp e,(resolve_exp_stmt s1))
-        | ExpStmt(e) -> ExpStmt(resolve_exp e)
+        | Block(stmts) -> {stmt = Block(List.map resolve_exp_stmt stmts); loc=stmt.loc; id = stmt.id }
+        | Either(stmts) -> {stmt = Either(List.map resolve_exp_stmt stmts); loc=stmt.loc; id = stmt.id }
+        | SomeStmt(p,e,s1) -> {stmt = SomeStmt(p,resolve_exp e,(resolve_exp_stmt s1)); loc=stmt.loc;  id = stmt.id }
+        | ForEach(p,e,s1) -> {stmt = ForEach(p,resolve_exp e,(resolve_exp_stmt s1)); loc=stmt.loc; id = stmt.id }
+        | Whenever(e,s1) -> {stmt = Whenever(resolve_exp e,(resolve_exp_stmt s1)); loc=stmt.loc; id = stmt.id }
+        | While(e,s1) -> {stmt = While(resolve_exp e,(resolve_exp_stmt s1)); loc=stmt.loc; id = stmt.id }
+        | ExpStmt(e) -> {stmt = ExpStmt(resolve_exp e); loc=stmt.loc; id = stmt.id }
         | _ -> stmt
 
 let rec resolve_counter_exp exp =
@@ -121,54 +121,64 @@ let rec resolve_counter_exp exp =
     | _ -> exp
 
 let rec resolve_if_stmt stmt =
-    match stmt with
+    match stmt.stmt with
         (*| Allof(stmts) -> Allof(List.map resolve_if_stmt stmts)*)
-        | Block(stmts) -> Block(List.map resolve_if_stmt stmts)
+        | Block(stmts) -> {stmt = Block(List.map resolve_if_stmt stmts); loc=stmt.loc; id = stmt.id}
         | If(e,s1,s2) ->
             begin
             match e.expr_type with
             | Automata ->
-                Either([
-                    Block([
-                        ExpStmt(e);
+                { stmt = Either([
+                    { stmt = Block([
+                        {stmt = ExpStmt(e); loc=e.loc; id=e.id};
                         (resolve_if_stmt s1)
-                    ]);
-                    Block([
-                        ExpStmt({e with exp = Not(e)});
+                    ]); loc=stmt.loc; id=e.id };
+                    { stmt = Block([
+                        {stmt = ExpStmt({e with exp = Not(e)}); loc=e.loc; id=e.id};
                         (resolve_if_stmt s2)
-                    ])
-                ])
-            | _ -> If(e,resolve_if_stmt s1,resolve_if_stmt s2)
+                    ]); loc=stmt.loc; id=e.id }
+                ]);
+                loc=stmt.loc;
+                id = stmt.id
+                }
+                
+            | _ -> { stmt = If(e,resolve_if_stmt s1,resolve_if_stmt s2); loc=stmt.loc; id=stmt.id}
             end
-        | Either(stmts) -> Either(List.map resolve_if_stmt stmts)
-        | SomeStmt(p,e,s1) -> SomeStmt(p,e,(resolve_if_stmt s1))
-        | ForEach(p,e,s1) -> ForEach(p,e,(resolve_if_stmt s1))
-        | Whenever(e,s1) -> Whenever(e,(resolve_if_stmt s1))
-        | While(e,s1) -> While(e,(resolve_if_stmt s1))
+        | Either(stmts) -> {stmt = Either(List.map resolve_if_stmt stmts); loc=stmt.loc; id=stmt.id}
+        | SomeStmt(p,e,s1) -> {stmt = SomeStmt(p,e,(resolve_if_stmt s1)); loc=stmt.loc; id=stmt.id}
+        | ForEach(p,e,s1) -> {stmt = ForEach(p,e,(resolve_if_stmt s1)); loc=stmt.loc; id=stmt.id}
+        | Whenever(e,s1) -> {stmt = Whenever(e,(resolve_if_stmt s1)); loc=stmt.loc; id=stmt.id}
+        | While(e,s1) -> {stmt = While(e,(resolve_if_stmt s1)); loc=stmt.loc; id=stmt.id}
         | _ -> stmt
 
 (*TODO Not Currently used.  Possibly remove. Otherwise fix to cover all stmt types*)
 let rec resolve_while_stmt stmt =
-    match stmt with
-        | Block(stmts) -> Block(List.map resolve_while_stmt stmts)
-        | If(e,s1,s2) -> If(e,(resolve_while_stmt s1),(resolve_while_stmt s2))
-        | Either(stmts) -> Either(List.map resolve_while_stmt stmts)
-        | ForEach(p,e,s1) -> ForEach(p,e,(resolve_while_stmt s1))
+    match stmt.stmt with
+        | Block(stmts) -> {stmt = Block(List.map resolve_while_stmt stmts); loc=stmt.loc; id=stmt.id}
+        | If(e,s1,s2) -> {stmt = If(e,(resolve_while_stmt s1),(resolve_while_stmt s2)); loc=stmt.loc; id=stmt.id}
+        | Either(stmts) -> {stmt = Either(List.map resolve_while_stmt stmts); loc=stmt.loc; id=stmt.id}
+        | ForEach(p,e,s1) -> {stmt = ForEach(p,e,(resolve_while_stmt s1)); loc=stmt.loc; id=stmt.id}
         | While(e,s1) ->
-            While({e with exp = Lit(True)},
-                Block([
-                    Either([
-                        Block([
-                            ExpStmt(e);
+            {stmt = While({e with exp = Lit(True)},
+                {stmt = Block([
+                    { stmt = Either([
+                        { stmt = Block([
+                            {stmt= ExpStmt(e); loc=e.loc; id=e.id};
                             (resolve_while_stmt s1)
-                        ]);
-                        Block([
-                            ExpStmt({e with exp = Not(e)});
-                            Break
-                        ])
-                    ])
-                ])
-            )
+                        ]); loc=s1.loc; id=s1.id};
+                        {stmt = Block([
+                            {stmt=ExpStmt({e with exp = Not(e)}); loc=e.loc; id=e.id};
+                            {stmt=Break; loc=e.loc; id=e.id}
+                        ]); loc=e.loc; id=e.id}
+                    ]);
+                    loc=stmt.loc;
+                    id = stmt.id}
+                ]);
+                loc=stmt.loc;
+                id = stmt.id }
+            );
+            loc=stmt.loc;
+            id = stmt.id}
         | _ -> stmt
 
 let resolve (Program(macros,(Network(p,stmt)))) f =
@@ -193,7 +203,7 @@ let implicit_whenever (Program(macros,(Network(p,stmt))) as prog) =
             | _ -> false
     in    
     let rec exists_whenever stmt =
-        match stmt with
+        match stmt.stmt with
             | Either(stmts)
             (*| Allof(stmts)*)
             | Block(stmts) -> List.exists exists_whenever stmts
@@ -211,15 +221,16 @@ let implicit_whenever (Program(macros,(Network(p,stmt))) as prog) =
         prog
     else
         let implicit_exp = {
-            exp = EQ({exp=Lit(StartIn);expr_type=Automata;loc=(0,0)}, {exp=Input;expr_type=Automata;loc=(0,0)});
+            exp = EQ({exp=Lit(StartIn);expr_type=Automata;loc=(0,0);id=0}, {exp=Input;expr_type=Automata;loc=(0,0);id=0});
             expr_type = Automata;
-            loc = (0,0)
+            loc = (0,0);
+            id = 0
         } in
-        let new_block =match stmt with
-            | Block(s_list) -> Block(List.map (fun s ->
-                match s with
-                    | SomeStmt(e,p,s1) -> SomeStmt(e,p,Whenever(implicit_exp,s1)) 
-                    | _ -> Whenever(implicit_exp,s)) s_list)
+        let new_block =match stmt.stmt with
+            | Block(s_list) -> {stmt = Block(List.map (fun s ->
+                match s.stmt with
+                    | SomeStmt(e,p,s1) -> {stmt=SomeStmt(e,p,{stmt=Whenever(implicit_exp,s1); loc=s1.loc; id=s1.id}); loc=s.loc; id=s.id}
+                    | _ -> {stmt=Whenever(implicit_exp,s); loc=s.loc; id=s.id}) s_list); loc=stmt.loc; id = stmt.id}
             | _ -> failwith "unreachable"
         in
         Program(macros,(Network(p,new_block)))

@@ -101,14 +101,14 @@ let print_reports sigma =
 
 let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_location list) =
     (*Printf.printf "evaluating: %s\n" (Language.statement_to_str stmt);*)
-    match stmt with
+    match stmt.stmt with
         | Report -> report sigma ; add_job next sigma
         | Break -> add_job (List.tl (List.tl next)) sigma
         | Block(b) ->
             begin
             match b with
                 | [] -> add_job next sigma
-                | hd::tl -> add_job (EvaluatingStatement(hd)::EvaluatingStatement(Block(tl))::next) sigma
+                | hd::tl -> add_job (EvaluatingStatement(hd)::EvaluatingStatement({stmt=Block(tl);loc=(List.hd tl).loc; id=stmt.id})::next) sigma
             end
         | If(exp,then_clause,else_clause) ->
             let result_list = evaluate_expression exp sigma in
@@ -132,9 +132,9 @@ let rec evaluate_statement (stmt :statement) (sigma : state) (next : job_locatio
                     let char_list = explode s in
                     let new_stmts = RemoveVariables([name]) :: List.fold_left (fun last c ->
                             (* add binding *)
-                            let new_assign = (Assign((name,NoOffset),{source with exp = Lit(CharLit(c,Char))})) in
+                            let new_assign = ({stmt=Assign((name,NoOffset),{source with exp = Lit(CharLit(c,Char))}); loc=stmt.loc; id=stmt.id}) in
                                 EvaluatingStatement(f)::EvaluatingStatement(new_assign)::last
-                        ) [EvaluatingStatement(VarDec([{var=name;typ=t;init=None;}]))] char_list in
+                        ) [EvaluatingStatement({stmt=VarDec([{var=name;typ=t;init=None;loc=stmt.loc}]); loc=stmt.loc; id=stmt.id})] char_list in
                         add_job ((List.rev new_stmts) @ next) sigma
                 (*TODO Add Array iteration here*)
                 end
@@ -378,7 +378,7 @@ and evaluate_expression (exp : expression) (sigma : state) : (value * state) lis
     sigma_prime
     end*)
     
-and evaluate_network (Network(params,(Block(b)))) sigma next =
+and evaluate_network (Network(params,({stmt=(Block(b)); id=ast_id}))) sigma next =
     List.iter (fun s ->
         let start_sigma = clone_state sigma in
         add_job (EvaluatingStatement(s) :: next) start_sigma

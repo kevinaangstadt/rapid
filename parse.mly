@@ -4,12 +4,23 @@
  *)
  
  open Language
+ open Id
+ 
+ let ast_seed = new_seed ()
  
  let make_exp exp loc =
     {
         exp = exp ;
         expr_type = NoType ;
         loc = loc ;
+        id = (get_num ast_seed) ;
+    }
+ 
+ let make_stmt stmt loc =
+    {
+        stmt = stmt ;
+        loc = loc ;
+        id = (get_num ast_seed);
     }
  
 %}
@@ -148,7 +159,7 @@ abstract_declarator:
     }
 
 block:
-      TLBRACE statement_list TRBRACE { Block($2) }
+      TLBRACE statement_list TRBRACE { (make_stmt (Block($2)) $1) }
 ;
 
 statement_list:
@@ -158,46 +169,51 @@ statement_list:
 
 opt_semi_list:
     | /* nothing */ { [] }
-    | TSEMICOLON opt_semi_list { Block([]) :: $2 }
+    | TSEMICOLON opt_semi_list { (make_stmt (Block([])) $1) :: $2 }
     ;
 
 statement:
-    | opt_semi_list { Block($1) }
+    | opt_semi_list { (make_stmt (Block($1)) ((List.hd $1).loc)) }
     | if_statement { $1 }
-    | either_statement { Either($1) }
+    | either_statement {
+       let stmt,loc = $1 in
+          (make_stmt (Either(stmt)) loc)
+      }
     | some_statement { $1 }
-    /*| allof_statement { Allof($1) }*/
+    /*| allof_statement { (make_stmt (Allof($1))) }*/
     | foreach_statement { $1 }
     | while_statement { $1 }
     | whenever_statement { $1 }
     | block { $1 }
-    | TREPORT TSEMICOLON { Report }
-    | TBREAK TSEMICOLON { Break }
+    | TREPORT TSEMICOLON { (make_stmt (Report) $1) }
+    | TBREAK TSEMICOLON { (make_stmt (Break) $1) }
     | declaration TSEMICOLON { $1 }
     | expression_statement { $1 }
     | IDENT TLPAREN args TRPAREN TSEMICOLON {
         let name,loc = $1 in
-            MacroCall(name,$3)
+            (make_stmt (MacroCall(name,$3)) loc)
     }
     | TDEBUG TLPAREN IDENT TRPAREN TSEMICOLON {
-        let str,_ = $3 in
-        Debug(str)
+        let str,loc = $3 in
+        (make_stmt (Debug(str)) loc)
     }
     | IDENT TASSIGN expression TSEMICOLON {
-        let str,_ = $1 in
-        Assign((str,NoOffset),$3)
+        let str,loc = $1 in
+        (make_stmt (Assign((str,NoOffset),$3)) loc)
     }
 ;
 
 declaration:
       typ declarator_list {
-        let dec_list = List.map (fun (name,value) ->
+        let dec_list = List.map (fun ((name,loc),value) ->
             {
                 var = name;
                 typ = $1;
                 init = value;
+                loc = loc;
             }) $2 in
-        VarDec(List.rev dec_list)
+        let rev = List.rev dec_list in
+        (make_stmt (VarDec(rev)) (List.hd rev).loc)
     }
 ;
 
@@ -212,7 +228,7 @@ declarator:
 ;
 
 direct_declarator:
-      IDENT { let(a,loc) = $1 in a }
+      IDENT { $1 }
     /*| direct_declarator TLBRACKET TRBRACKET {  }
     | direct_declarator TLBRACKET expression TRBRACKET {  }*/
 ;
@@ -242,7 +258,7 @@ basic_typ:
 ;
 
 either_statement:
-    | TEITHER block orelse_list { $2 :: $3 }
+    | TEITHER block orelse_list { ($2 :: $3, $1) }
 ;
 
 orelse_list:
@@ -260,28 +276,28 @@ andalso_list:
 ;*/
 
 if_statement:
-      TIF TLPAREN expression TRPAREN statement %prec TTHEN { If($3,$5,Block([])) }
-    | TIF TLPAREN expression TRPAREN statement TELSE statement { If($3,$5,$7) }
+      TIF TLPAREN expression TRPAREN statement %prec TTHEN { (make_stmt (If($3,$5,(make_stmt (Block([])) (-1,-1)))) $1) }
+    | TIF TLPAREN expression TRPAREN statement TELSE statement { (make_stmt (If($3,$5,$7)) $1) }
 ;
 
 some_statement:
-    | TSOME TLPAREN formal_param_dec TCOLON operand TRPAREN statement { SomeStmt($3,$5,$7) }
+    | TSOME TLPAREN formal_param_dec TCOLON operand TRPAREN statement { (make_stmt (SomeStmt($3,$5,$7)) $1) }
 ;
 
 foreach_statement:
-      TFOREACH TLPAREN formal_param_dec TCOLON operand TRPAREN statement { ForEach($3,$5,$7) }
+      TFOREACH TLPAREN formal_param_dec TCOLON operand TRPAREN statement { (make_stmt (ForEach($3,$5,$7)) $1) }
 ;
 
 while_statement:
-      TWHILE TLPAREN expression TRPAREN statement { While($3,$5) }
+      TWHILE TLPAREN expression TRPAREN statement { (make_stmt (While($3,$5)) $1) }
 ;
 
 whenever_statement:
-      TWHENEVER TLPAREN expression TRPAREN statement { Whenever($3,$5) }
+      TWHENEVER TLPAREN expression TRPAREN statement { (make_stmt (Whenever($3,$5)) $1) }
 ;
 
 expression_statement:
-      expression TSEMICOLON { ExpStmt($1) }
+      expression TSEMICOLON { (make_stmt (ExpStmt($1)) $1.loc) }
 ;
 
 expression:

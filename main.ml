@@ -112,7 +112,7 @@ let process (lexbuf : Lexing.lexbuf) config =
     in
         if !intermediate = "" then
             (*print_endline (Language.program_to_str program_i) ;*)
-            Compiler.compile program_i config net_name
+            ( (Compiler.compile program_i config net_name), program_t)
             
             (*print_endline (Language.program_to_str program) ; *)  (**)
         else
@@ -168,11 +168,13 @@ let config = ref "" in
 let set_config new_c = config := new_c in
 
 let merge = ref false in
+let debug = ref false in
 
 let argspec = [
         ("-o", Arg.String (set_out), "filename Names output file; a.anml by default" );
         ("-c", Arg.String (set_config), "config_file Provides variable configuration for network");
         ("-i", Arg.String (set_intermediate), "filename Write intermediate RAPID to filename");
+        ("-g", Arg.Set debug, " Enable debugging output");
         ("--tiling", Arg.Set Compiler.do_tiling, " Enable tiling optimization");
         ("--merge", Arg.Set merge, " Combine output into single ANML file")
     ] in
@@ -187,18 +189,36 @@ let argspec = Arg.align argspec in
         if String.length !config = 0 then []
         else read_config !config
     in
-    let anml,abstract_mapping = read_file !file config in
+    let ((anml,abstract_mapping), ast) = read_file !file config in
     try
         if not !merge then
+            begin
             List.iteri (fun i a ->
                 let channel = open_out (Printf.sprintf "%d.%s" i !output) in
                 (Automata.network_to_file a channel) ;
                 close_out channel
             ) anml
+            end
         else
+        begin
             let channel = open_out !output in
             Automata.networks_to_file anml channel ;
+            close_out channel 
+        end
+        ;
+         (* Write out debugging *)
+        if !debug then
+            let channel = open_out (Printf.sprintf "%s.debug" !output) in
+            List.iteri (fun i a ->
+                (Automata.network_to_ast_id a channel)
+            ) anml ;
+            close_out channel;
+            
+            let channel = open_out (Printf.sprintf "%s.debug.ast-line" !output) in
+            Language.program_to_line ast channel;
             close_out channel
+        else ()
+        
         
     with Sys_error _ ->
         Printf.printf "Failed to write output" ; exit (-1)

@@ -32,6 +32,7 @@ type expression = {
     exp : expression_kind ;
     mutable expr_type : typ ;
     loc : loc ;
+    id : int ;
 }
 
 and expression_kind =
@@ -74,10 +75,17 @@ type initialize =
 type vardec = {
     var          : string ;
     mutable typ  : typ ;
-    init         : initialize option
+    init         : initialize option;
+    loc          : loc
 }
 
-type statement =
+type statement = {
+    stmt : statement_kind;
+    loc : loc;
+    id : int
+}
+
+and statement_kind =
     | Report
     | Break
     | Block of statement list 
@@ -175,7 +183,7 @@ and params_to_str (Parameters(a)) = List.fold_left (fun prev v -> (prev) ^ (spri
 
 and args_to_str (Arguments(a)) = List.fold_left (fun prev v -> (prev) ^(sprintf "%s, " (exp_to_str v))) "" a
 
-and statement_to_str (a : statement) = match a with
+and statement_to_str (a : statement) = match a.stmt with
     | Break -> "break;\n"
     | Report -> "report;\n"
     | Block(b) -> sprintf "{ \n %s }\n" (List.fold_left (fun prev s -> (sprintf "%s     %s" prev (statement_to_str s))) "" b)
@@ -234,5 +242,89 @@ and exp_to_str exp = match exp.exp with
     | Fun(a,b,c)    -> sprintf "%s.%s(%s)" (lval_to_str a) b (args_to_str c)
     | Input         -> "input()"
     
+let rec program_to_line (Program(macros,network)) channel =
+    List.iter (fun a ->
+                macro_to_line a channel) macros ;
+    network_to_line network channel
+    
+and network_to_line (Network(params,stmts)) channel =
+    statement_to_line stmts channel
+    
+and macro_to_line (Macro(name,params,stmts)) channel =
+   statement_to_line stmts channel
+   
+and statement_to_line (a : statement) channel =
+    let line,_ = a.loc in
+    fprintf channel "%d\t%d\n" a.id line ;
+    match a.stmt with
+    | Break -> ()
+    | Report -> ()
+    | Block(b) -> List.iter (fun a -> statement_to_line a channel) b
+    | Either(e) -> List.iter (fun a -> statement_to_line a channel) e
+    | SomeStmt(var,exp,s) -> begin
+        exp_to_line exp channel;
+        statement_to_line s channel
+    end
+    (*| Allof(e) -> begin
+        match e with
+            | [] -> ""
+            | hd :: tl -> sprintf "allof %s \n %s" (statement_to_str hd) (List.fold_left (fun prev s -> (sprintf "%s andalso %s" prev (statement_to_str s))) "" tl)
+        end*)
+    | If(exp,t,e) -> begin
+        exp_to_line exp channel;
+        statement_to_line t channel;
+        statement_to_line e channel
+    end
+    | While(exp,t) ->begin
+        exp_to_line exp channel;
+        statement_to_line t channel
+    end
+    | Whenever(exp,t) -> begin
+        exp_to_line exp channel;
+        statement_to_line t channel
+    end
+    | ForEach(var,exp,s) -> begin
+        exp_to_line exp channel;
+        statement_to_line s channel
+    end
+    | VarDec(var) -> List.iter (fun var -> var_to_line var channel) var
+    | Assign(l,e) -> begin
+        exp_to_line e channel
+    end
+    | MacroCall(a,b) -> ()
+    | ExpStmt(exp) -> exp_to_line exp channel
+    | Debug(s) -> ()
+    
+and var_to_line (a:vardec) channel =
+    match a.init with
+    | Some a -> init_to_line a channel
+    | None -> ()
 
+and init_to_line a channel =
+    match a with
+    | PrimitiveInit(a) -> exp_to_line a channel
+    | ArrayInit(a) -> List.iter (fun a -> init_to_line a channel) a
 
+and exp_to_line exp channel =
+    let line,_ = exp.loc in
+    fprintf channel "%d\t%d\n" exp.id line;
+    match exp.exp with
+    | And(a,b)      
+    | PAnd(a,b)    
+    | Or(a,b)       
+    | Plus(a,b)     
+    | Minus(a,b)   
+    | Times(a,b)    
+    | Mod(a,b)
+    | EQ(a,b)       
+    | NEQ(a,b)      
+    | LEQ(a,b)      
+    | GEQ(a,b)      
+    | LT(a,b)       
+    | GT(a,b)       -> exp_to_line a channel ; exp_to_line b channel
+    | Not(a)       
+    | Negative(a)   -> exp_to_line a channel
+    | Lval(a)        -> ()
+    | Lit(a)        -> ()
+    | Fun(a,b,c)    ->  ()
+    | Input         -> ()
