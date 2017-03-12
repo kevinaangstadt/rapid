@@ -132,8 +132,8 @@ type value =
 type container =
     | MacroContainer of macro
     | Variable of string * typ * value option
-type exp_return =
-    | AutomataExp of Automata.element list
+type 'a exp_return =
+    | AutomataExp of 'a Automata.element list
     | CounterExp of (string list * int list * string * string)
     | BooleanExp of bool
     | IntExp of int
@@ -149,6 +149,24 @@ type symbol = (string, container) Hashtbl.t
 (* Printing functions *)
 
 open Printf
+
+let rec value_to_string (value:value option) =
+    match value with
+    | Some(v) -> begin
+        match v with
+        | StringValue(s) -> s
+        | IntValue(i) -> string_of_int i
+        | CharValue(c) -> Char.escaped c
+        | BooleanValue(b) -> if b then "true" else "false"
+        | ArrayValue(a) ->
+            let l = Array.to_list a in
+                if l = [] then
+                    "[]"
+                else 
+                    "[" ^ List.fold_left (fun acc v -> ", " ^ (value_to_string v) ) (value_to_string (List.hd l)) (List.tl l) ^ "]"
+        | _ -> "Abstract Value"
+    end
+    | _ -> "No Value"
 
 let rec program_to_str (Program(macros,network)) = sprintf "%s %s" (List.fold_left (fun prev a -> (prev) ^ (sprintf "%s" (macro_to_str a) )) "" macros) (network_to_str network)
 

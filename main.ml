@@ -208,9 +208,9 @@ let argspec = Arg.align argspec in
         ;
          (* Write out debugging *)
         if !debug then
-            let channel = open_out (Printf.sprintf "%s.debug" !output) in
+            let channel = open_out (Printf.sprintf "%s.debug.json" !output) in
             List.iteri (fun i a ->
-                (Automata.network_to_ast_id a channel)
+                (Debug.network_to_ast_id a channel)
             ) anml ;
             close_out channel;
             

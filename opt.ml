@@ -38,7 +38,7 @@ let get_blocks net =
 
 
 (*minimization of automata*)
-let remove_dead_states (net:Automata.network ref) abstract_mapping =
+let remove_dead_states (net:'a Automata.network ref) abstract_mapping =
     begin
     let visited = ref StringSet.empty in
     let rec remove_state e =

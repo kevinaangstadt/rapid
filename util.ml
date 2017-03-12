@@ -4,6 +4,12 @@
  *)
 
 module StringSet = Set.Make(String)
+module IntSet = Set.Make(
+    struct
+        let compare = Pervasives.compare
+        type t = int
+    end
+)
 
 type loc = int*int
 

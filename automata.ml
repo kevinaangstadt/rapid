@@ -32,30 +32,32 @@ type combinatorial =
     | POS
     | NSOP
     | NPOS
+    
+type 'a ast = int * (string, 'a) Hashtbl.t
 
-type element =
-    | STE of string * string * bool * start * bool * connections * bool * int list
+type 'a element =
+    | STE of string * string * bool * start * bool * 'a connections * bool * 'a ast list
         (* id, symbol set, negate, start, latch, activate on match, report on match, ast id *)
-    | Counter of string * int * at_target * bool * connections * int list
+    | Counter of string * int * at_target * bool * 'a connections * 'a ast list
         (* id, target, at_target, report on target, activate on target, ast id *)
-    | Combinatorial of combinatorial * string * bool * bool * connections * int list
+    | Combinatorial of combinatorial * string * bool * bool * 'a connections * 'a ast list
         (* type, id, eod, report on high, activate on high, ast id *)
-and element_connection = element * string option
-and connections = {
-    mutable children : element_connection list;
+and 'a element_connection = 'a element * string option
+and 'a connections = {
+    mutable children : 'a element_connection list;
     mutable parents : string list;
 }
     
-type network = {
-    states : (string, element) Hashtbl.t;
-    start : (string * element) list;
-    report : (string * element) list;
-    last : element option; (*TODO will probably have to be some sort of list*)
+type 'a network = {
+    states : (string, 'a element) Hashtbl.t;
+    start : (string * 'a element) list;
+    report : (string * 'a element) list;
+    last : 'a element option; (*TODO will probably have to be some sort of list*)
     id : string;
     description : string;
 }
 
-type macro = {
+(*type macro = {
     id : string;
     head : element option;
     tail : element option;
@@ -64,7 +66,7 @@ type macro = {
     output_ids : string list;
     input : (string * element_connection) list;
     output : (string * element) list;
-}
+}*)
 
 exception Duplicate_ID
 exception Element_not_found of string
@@ -80,9 +82,9 @@ let create name desc = ref {
     description = desc;
 }
 
-let clone (net:network ref) = ref {!net with states = Hashtbl.copy (!net).states }
+let clone (net:'a network ref) = ref {!net with states = Hashtbl.copy (!net).states }
 
-let set_name (net:network ref) name = net := {!net with id=name;}
+let set_name (net:'a network ref) name = net := {!net with id=name;}
 
 let make_ste id set neg strt latch connect report ast_id_list=
     STE(id,set,neg,strt,latch,connect,report, ast_id_list)
@@ -105,16 +107,16 @@ let generate_connections conn_list =
         parents = [];
     }
 
-let contains (net:network ref) e =
+let contains (net:'a network ref) e =
     let id = get_id e in
     Hashtbl.mem (!net).states id
 
-let get_element (net: network ref) e_id =
+let get_element (net: 'a network ref) e_id =
     try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
 
 let add_element net e =
-let add_helper (net: network ref) id e start report = begin
+let add_helper (net: 'a network ref) id e start report = begin
 let start = match start with
     | NotStart -> false
     | Start
@@ -132,17 +134,17 @@ end in match e with
     | Counter(id,target,behavior,report,connect,ast_id) -> add_helper net id e NotStart report
     | Combinatorial(_,id,eod,report,connect,ast_id) -> add_helper net id e NotStart report
 
-let remove_element (net: network ref) e_id =
+let remove_element (net:'a network ref) e_id =
     Hashtbl.remove (!net).states e_id 
 
-let connect (net:network ref) e1_id e2_id (terminal : string option) =
+let connect (net:'a network ref) e1_id e2_id (terminal : string option) =
 let e1 = begin try Hashtbl.find (!net).states e1_id
     with Not_found -> raise (Element_not_found e1_id)
     end in
 let e2 = begin try Hashtbl.find (!net).states e2_id
     with Not_found -> raise (Element_not_found e2_id)
     end in
-let e2_conn : element_connection = begin match terminal with 
+let e2_conn : 'a element_connection = begin match terminal with 
     | None -> (e2,None)
     | Some x -> (e2,Some x)
     end in
@@ -157,7 +159,7 @@ let e2_conn : element_connection = begin match terminal with
             if not (List.mem e2_conn connect.children) then
                 Hashtbl.replace (!net).states e1_id (Combinatorial(typ,id,eod,report,{connect with children = e2_conn::connect.children},ast_id))
 
-let set_count (net:network ref) e_id cnt =
+let set_count (net:'a network ref) e_id cnt =
 let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
     end in begin
@@ -167,7 +169,7 @@ let e = begin try Hashtbl.find (!net).states e_id
         | _ -> raise (Element_not_found e_id)
     end
 
-let set_latch (net:network ref) e_id latch =
+let set_latch (net:'a network ref) e_id latch =
 let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
     end in begin
@@ -177,10 +179,10 @@ let e = begin try Hashtbl.find (!net).states e_id
         | _ -> raise (Element_not_found e_id)
     end
 
-let is_start_empty (net:network ref) =
+let is_start_empty (net:'a network ref) =
     (!net).start = []
 
-let set_start (net:network ref) e_id strt =
+let set_start (net:'a network ref) e_id strt =
 let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
     end in begin
@@ -195,7 +197,7 @@ let e = begin try Hashtbl.find (!net).states e_id
             | _ -> true
         ) ((e_id,e)::(!net).start))}
 
-let set_report (net:network ref) e_id r =
+let set_report (net:'a network ref) e_id r =
 let e = begin try Hashtbl.find (!net).states e_id
     with Not_found -> raise (Element_not_found e_id)
     end in begin
@@ -210,7 +212,7 @@ let e = begin try Hashtbl.find (!net).states e_id
     net := {!net with report = (List.filter (fun (a,b) -> a <> e_id) ((e_id,e)::(!net).report))}
     
 (*Operations on Macros*)
-let m_create id input output = {
+(*let m_create id input output = {
     id = id;
     head = None;
     tail = None;
@@ -219,7 +221,7 @@ let m_create id input output = {
     output_ids = output;
     input = [];
     output = [];
-}
+}*)
 
 (* We do not currently use macros, so this code is outdated.
 let m_add_element macro e =
@@ -288,7 +290,7 @@ let e = begin try Hashtbl.find macro.states e_id
 *)
 
 (*lineage generation*)
-let generate_parents (net:network ref) =
+let generate_parents (net:'a network ref) =
     Hashtbl.iter ( fun k e ->
         match e with
             | STE(_,_,_,_,_,conn,_,_)
@@ -307,7 +309,7 @@ let generate_parents (net:network ref) =
                 end
     ) (!net).states
 
-let clear_parents (net:network ref) =
+let clear_parents (net:'a network ref) =
     Hashtbl.iter ( fun k e ->
         match e with
             | STE(_,_,_,_,_,conn,_,_)
@@ -334,7 +336,7 @@ let element_to_str e =
             | NotStart -> "none"
             | Start -> "start-of-data"
             | AllStart -> "all-input" 
-    in let connection_id_to_str ((e,c) : element_connection) =
+    in let connection_id_to_str ((e,c) : 'a element_connection) =
         let term = match c with
             | None -> begin
                 match e with
@@ -411,7 +413,7 @@ let element_to_str e =
             List.fold_left (fun prev b -> prev ^ Printf.sprintf "<activate-on-high element = \"%s\" />\n" (connection_id_to_str b) ) "" connect.children ^
             Printf.sprintf "</%s>\n" comb_typ
 
-let network_to_str (net:network ref) =
+let network_to_str (net:'a network ref) =
     let internal = ref "" in
     Hashtbl.iter (fun k e -> internal := !internal ^ element_to_str e) (!net).states ;
     "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ^
@@ -419,33 +421,32 @@ let network_to_str (net:network ref) =
     !internal ^
     "</automata-network>"
 
-let network_to_file (net:network ref) (channel:out_channel) =
+let network_to_file (net:'a network ref) (channel:out_channel) =
     Printf.printf "Automaton size: %d\n%!" (Hashtbl.length (!net).states);
     Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
     Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" (!net).id (!net).id (!net).description ;
     Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
     Printf.fprintf channel "</automata-network>"
 
-let networks_to_file (nets:(network ref) list) (channel:out_channel) =
+let networks_to_file (nets:('a network ref) list) (channel:out_channel) =
     assert (nets <> []);
     Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
     Printf.fprintf channel "<automata-network name=\"%s\" id=\"%s\">\n<description>%s</description>\n" !(List.hd nets).id !(List.hd nets).id !(List.hd nets).description ;
-    let size = List.fold_left (fun size (net:network ref) ->
+    let size = List.fold_left (fun size (net:'a network ref) ->
         Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
         size + (Hashtbl.length (!net).states);
     ) 0 nets in
     Printf.printf "Automaton size: %d\n%!" size;
     Printf.fprintf channel "</automata-network>"
 
-let rec print_rec (e:element) =
+let rec print_rec (e:'a element) =
     let _ = print_endline (element_to_str e) in
     match e with
         | STE(_,_,_,_,_,connect,_,_)
         | Counter(_,_,_,_,connect,_)
         | Combinatorial(_,_,_,_,connect,_) -> List.iter (fun (a,c) -> print_rec a) connect.children
 
-let network_to_ast_id (net:network ref) (channel:out_channel) =
-    Hashtbl.iter (fun k e -> List.iter (fun ast_id -> Printf.fprintf channel "%s\t%d\n" (get_id e) ast_id) (element_to_ast_id e)) (!net).states
+
 (*
 match e with
     | STE(id,set,strt,latch,connect,report) ->
