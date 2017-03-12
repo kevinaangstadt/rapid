@@ -154,16 +154,25 @@ let rec value_to_string (value:value option) =
     match value with
     | Some(v) -> begin
         match v with
-        | StringValue(s) -> s
+        | StringValue(s) ->
+            if (String.length s) > 1 && (String.sub s 0 2) = "\\x" then
+                "\\" ^ s
+            else
+                s 
         | IntValue(i) -> string_of_int i
-        | CharValue(c) -> Char.escaped c
+        | CharValue(c) ->
+            let esc = Char.escaped c in
+            if (String.length esc) > 1 && (String.sub esc 0 2) = "\\x" then
+                "\\" ^ esc
+            else
+                esc
         | BooleanValue(b) -> if b then "true" else "false"
         | ArrayValue(a) ->
             let l = Array.to_list a in
                 if l = [] then
                     "[]"
                 else 
-                    "[" ^ List.fold_left (fun acc v -> ", " ^ (value_to_string v) ) (value_to_string (List.hd l)) (List.tl l) ^ "]"
+                    "[" ^ List.fold_left (fun acc v -> acc ^ ", '" ^ (value_to_string v) ^ "'" ) ("'" ^ (value_to_string (List.hd l)) ^ "'") (List.tl l) ^ "]"
         | _ -> "Abstract Value"
     end
     | _ -> "No Value"

@@ -221,10 +221,10 @@ let implicit_whenever (Program(macros,(Network(p,stmt))) as prog) =
         prog
     else
         let implicit_exp = {
-            exp = EQ({exp=Lit(StartIn);expr_type=Automata;loc=(0,0);id=0}, {exp=Input;expr_type=Automata;loc=(0,0);id=0});
+            exp = EQ({exp=Lit(StartIn);expr_type=Automata;loc=stmt.loc;id=stmt.id}, {exp=Input;expr_type=Automata;loc=stmt.loc;id=stmt.id});
             expr_type = Automata;
-            loc = (0,0);
-            id = 0
+            loc = stmt.loc;
+            id = stmt.id
         } in
         let new_block =match stmt.stmt with
             | Block(s_list) -> {stmt = Block(List.map (fun s ->

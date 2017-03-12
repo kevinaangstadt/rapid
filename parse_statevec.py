@@ -31,12 +31,18 @@ def process(filename, ste_to_ast, ast_to_line):
         for i in range(num_stes):
             ste = lines.pop(0).strip().split(",")[0]
             for ast in ste_to_ast[ste]:
-                lineno = int(ast_to_line[str(ast["ast_id"])])
-                data.append({
-                    "ste" : ste,
-                    "ast" : ast,
-                    "lineno" : lineno
-                })
+                try:
+                    lineno = int(ast_to_line[str(int(ast["ast_id"]))])
+                    data.append({
+                        "ste" : ste,
+                        "ast" : ast,
+                        "lineno" : lineno
+                    })
+                except KeyError as e:
+                    print ast
+                    print ast_to_line
+                    exit(0)
+                
         vec[offset] = data
     
     return vec

@@ -203,16 +203,16 @@ let argspec = Arg.align argspec in
         begin
             let channel = open_out !output in
             Automata.networks_to_file anml channel ;
-            close_out channel 
+            close_out channel
         end
         ;
          (* Write out debugging *)
         if !debug then
             let channel = open_out (Printf.sprintf "%s.debug.json" !output) in
-            List.iteri (fun i a ->
-                (Debug.network_to_ast_id a channel)
-            ) anml ;
+            Debug.networks_to_ast_id anml channel;
             close_out channel;
+            
+            
             
             let channel = open_out (Printf.sprintf "%s.debug.ast-line" !output) in
             Language.program_to_line ast channel;
