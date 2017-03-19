@@ -29,7 +29,9 @@ def process(filename, ste_to_ast, ast_to_line):
         num_stes = int(lines.pop(0).strip())
         data = list()
         for i in range(num_stes):
-            ste = lines.pop(0).strip().split(",")[0]
+            data = lines.pop(0).strip().split(",")
+            ste = data[0]
+            val = data[1]
             for ast in ste_to_ast[ste]:
                 try:
                     lineno = int(ast_to_line[str(int(ast["ast_id"]))])

@@ -158,14 +158,20 @@ let rec value_to_string (value:value option) =
             if (String.length s) > 1 && (String.sub s 0 2) = "\\x" then
                 "\\" ^ s
             else
-                s 
+                let s_l = explode s in
+                let esc = List.map (fun c ->
+                    if (Char.code c) < 32 || (Char.code c) > 126 then
+                        Printf.sprintf "\\\\x%02x" (Char.code c)
+                    else
+                        Printf.sprintf "%c" c
+                    ) s_l in
+                List.fold_left (fun acc s -> acc ^ s) "" esc
         | IntValue(i) -> string_of_int i
         | CharValue(c) ->
-            let esc = Char.escaped c in
-            if (String.length esc) > 1 && (String.sub esc 0 2) = "\\x" then
-                "\\" ^ esc
-            else
-                esc
+                if (Char.code c) < 32 || (Char.code c) > 126 then
+                        Printf.sprintf "\\\\x%02x" (Char.code c)
+                    else
+                        Printf.sprintf "%c" c
         | BooleanValue(b) -> if b then "true" else "false"
         | ArrayValue(a) ->
             let l = Array.to_list a in

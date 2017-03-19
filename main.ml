@@ -176,7 +176,8 @@ let argspec = [
         ("-i", Arg.String (set_intermediate), "filename Write intermediate RAPID to filename");
         ("-g", Arg.Set debug, " Enable debugging output");
         ("--tiling", Arg.Set Compiler.do_tiling, " Enable tiling optimization");
-        ("--merge", Arg.Set merge, " Combine output into single ANML file")
+        ("--merge", Arg.Set merge, " Combine output into single ANML file") ;
+        ("--verbose-lexing", Arg.Set Lex.enable_verbose, " Enable verbose lexing")
     ] in
 let argspec = Arg.align argspec in
     Arg.parse argspec (fun x -> file := x) "Usage: rapid [options] [input file]" ;

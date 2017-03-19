@@ -321,9 +321,9 @@ let clear_parents (net:'a network ref) =
 (*Output Functions*)
 let element_to_ast_id e =
     match e with
-    | STE(_,_,_,_,_,_,_,ast_id)
-    | Combinatorial(_,_,_,_,_,ast_id)
-    | Counter(_,_,_,_,_,ast_id) -> ast_id
+    | STE(_,_,_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"ste")) ast_id
+    | Combinatorial(_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"boolean")) ast_id
+    | Counter(_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"counter")) ast_id
 
 let element_to_str e =
     let behavior_to_str behavior =
