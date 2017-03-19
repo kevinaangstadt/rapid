@@ -29,10 +29,17 @@ def process(filename, ste_to_ast, ast_to_line):
         num_stes = int(lines.pop(0).strip())
         data = list()
         for i in range(num_stes):
-            data = lines.pop(0).strip().split(",")
-            ste = data[0]
-            val = data[1]
+            s_data = lines.pop(0).strip().split(",")
+            ste = s_data[0]
+            val = s_data[1]
+            if len(s_data) == 3:
+                port = s_data[2].split(":")
+            else:
+                port = []
             for ast in ste_to_ast[ste]:
+                if ast["el_type"] is "counter":
+                    if ast["port"] not in port:
+                        pass
                 try:
                     lineno = int(ast_to_line[str(int(ast["ast_id"]))])
                     data.append({

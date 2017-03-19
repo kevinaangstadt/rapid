@@ -32,8 +32,10 @@ type combinatorial =
     | POS
     | NSOP
     | NPOS
-    
-type 'a ast = int * (string, 'a) Hashtbl.t
+
+type 'a ast =
+      AST of int * (string, 'a) Hashtbl.t
+    | PortAST of int * string * (string, 'a) Hashtbl.t
 
 type 'a element =
     | STE of string * string * bool * start * bool * 'a connections * bool * 'a ast list
@@ -321,9 +323,9 @@ let clear_parents (net:'a network ref) =
 (*Output Functions*)
 let element_to_ast_id e =
     match e with
-    | STE(_,_,_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"ste")) ast_id
-    | Combinatorial(_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"boolean")) ast_id
-    | Counter(_,_,_,_,_,ast_id) -> List.map (fun (a,b) -> (a,b,"counter")) ast_id
+    | STE(_,_,_,_,_,_,_,ast_id) -> List.map (fun a -> (a,"ste")) ast_id
+    | Combinatorial(_,_,_,_,_,ast_id) -> List.map (fun a -> (a,"boolean")) ast_id
+    | Counter(_,_,_,_,_,ast_id) -> List.map (fun a -> (a,"counter")) ast_id
 
 let element_to_str e =
     let behavior_to_str behavior =

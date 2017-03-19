@@ -90,7 +90,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             (last, break)
         | Break ->
             let brk = List.fold_left (fun brk s->
-                    let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
+                    let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
                     Automata.add_element net inv;
                     Automata.connect net s (Automata.get_id inv) None ;
                     (Automata.get_id inv) :: brk
@@ -171,8 +171,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             (*if this is a counter experession*)
                 begin
                 (*Add in traps!*)
-                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
-                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 Automata.add_element net yes_trigger ;
                 Automata.add_element net no_trigger ;
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
@@ -230,9 +230,9 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             match exp_return with
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
-                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false, [(exp.id, Hashtbl.copy symbol_table)]) in
-                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and_"^id, false, false, (Automata.generate_connections []), [(exp.id, Hashtbl.copy symbol_table)]) in
-                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and_"^id, false, false, (Automata.generate_connections []), [(exp.id, Hashtbl.copy symbol_table)]) in
+                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false, [AST(exp.id, Hashtbl.copy symbol_table)]) in
+                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
+                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
                     Automata.add_element net spin ;
                     Automata.add_element net spin_and;
                     Automata.add_element net exp_and;
@@ -421,8 +421,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                         let num = get_num c_seed in
                         let id = Printf.sprintf "%s_%s_%d" label dec.var num in
                         let i_id = Printf.sprintf "%s_i" id in
-                        let counter = Automata.Counter(id,100,Automata.Latch,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, (Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let counter = Automata.Counter(id,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id ;
                         (*Hashtbl.add symbol_table dec.var (Variable(id,dec.typ,None)) ;*)
@@ -446,19 +446,19 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                         let i_id2 = Printf.sprintf "%s_i" id2 in
                         let id_true = Printf.sprintf "%s_true" id1 in
                         let id_false = Printf.sprintf "%s_false" id1 in
-                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, (Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, (Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
                         let out_true = if is_eq then
-                            Automata.Combinatorial(AND,id_true,false,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(AND,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
                         else
-                            Automata.Combinatorial(OR,id_true,false,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(OR,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
                         in
                         let out_false = if is_eq then
-                            Automata.Combinatorial(AND,id_false,false,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(AND,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
                         else
-                            Automata.Combinatorial(OR,id_false,false,false,(Automata.generate_connections []), [(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(OR,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
                         in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id1 ;
@@ -580,10 +580,10 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
             end in
             if a.exp = Input then
                 (*FIXME getting rid of Char.escaped...not sure of the impacts of this*)
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 helper new_element
 
             else raise (Syntax_error "Something with Input")
@@ -597,10 +597,10 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                         [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report,ast_id)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c"(get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false,[(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c"(get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -712,7 +712,7 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
             in
-            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect),[(exp.id, Hashtbl.copy symbol_table)]) in
+            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect),[AST(exp.id, Hashtbl.copy symbol_table)]) in
             let a_eval = cgen_expression_aut a None (Some [join]) prefix seed in
             let b_eval = cgen_expression_aut b None (Some [join]) prefix seed in
                 a_eval@b_eval
@@ -741,20 +741,20 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false,[(a.id,Hashtbl.copy symbol_table);(b.id, Hashtbl.copy symbol_table)])]
+                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false,[AST(a.id,Hashtbl.copy symbol_table);AST(b.id, Hashtbl.copy symbol_table)])]
                 else
                 let b_eval = cgen_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false, [(a.id, Hashtbl.copy symbol_table)]) :: b_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(a.id, Hashtbl.copy symbol_table)]) :: b_eval
             else
                 if can_condense b then
                 let a_eval = cgen_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false, [(b.id, Hashtbl.copy symbol_table)]) :: a_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(b.id, Hashtbl.copy symbol_table)]) :: a_eval
                 else
                     let a_eval = cgen_expression_aut a None s prefix seed in
                     let b_eval = cgen_expression_aut b None s prefix seed in
@@ -772,8 +772,13 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                             let c_list = match v with
                                 | Some CounterList(x) -> x in
                             begin
-                            List.iter ( fun c -> 
-                                List.iter (fun l -> Automata.connect net (Automata.get_id l) c (Some "cnt")) last
+                            List.iter ( fun  c ->
+                                (* Update so that we have debugging info for counts *)
+                                let (Automata.Counter(id,b,c,d,e,ast_list) as old_c) = Automata.get_element net c in
+                                let new_c = Automata.Counter(id,b,c,d,e,PortAST(exp.id, "cnt", Hashtbl.copy symbol_table)::ast_list) in
+                                Automata.remove_element net id ;
+                                Automata.add_element net new_c ;
+                                List.iter (fun l -> Automata.connect net (Automata.get_id l) id (Some "cnt")) last
                             ) c_list ; []
                             
                             end
@@ -861,8 +866,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,(Automata.generate_connections []), [(exp.id, Hashtbl.copy symbol_table)]) in
-            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,(Automata.generate_connections []), [(exp.id, Hashtbl.copy symbol_table)]) in
+            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,(Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
+            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,(Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
                 Automata.add_element net yes_and ;
                 Automata.add_element net no_or ;
                 Automata.connect net a_yes yes None ;
@@ -875,8 +880,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,(Automata.generate_connections []),[(exp.id, Hashtbl.copy symbol_table)]) in
-            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,(Automata.generate_connections []),[(exp.id, Hashtbl.copy symbol_table)]) in
+            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,(Automata.generate_connections []),[AST(exp.id, Hashtbl.copy symbol_table)]) in
+            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,(Automata.generate_connections []),[AST(exp.id, Hashtbl.copy symbol_table)]) in
                 Automata.add_element net yes_or ;
                 Automata.add_element net no_and ;
                 Automata.connect net a_yes yes None ;
