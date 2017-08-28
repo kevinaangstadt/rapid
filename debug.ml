@@ -13,6 +13,9 @@ let helper (net:'a Automata.network ref) (channel:out_channel) =
                                     match e with
                                     | Variable(name,typ,value) -> Printf.sprintf  "{\"id\":\"%s\",\"kind\":\"variable\",\"type\":\"%s\",\"value\":\"%s\"}" name (typ_to_str typ) (value_to_string value)
                                     | MacroContainer(_) -> Printf.sprintf "{\"id\":\"%s\",\"kind\":\"macro\"}" k
+                                    | DebugContainer(c) ->
+                                        let dbg_val = value_to_string (Some(c)) in
+                                        Printf.sprintf "{\"id\":\"%s\",\"kind\":\"debug\",\"value\":\"%s\"}" k dbg_val
                     in
                     let str,id,prt = match ast_id with
                         | AST(ast_id, st) -> StringSet.fold ( fun k acc ->

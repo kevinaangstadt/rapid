@@ -212,7 +212,19 @@ let e = begin try Hashtbl.find (!net).states e_id
             Hashtbl.replace (!net).states e_id (Combinatorial(typ,id,eod,r,connect,ast_id))
     end ;
     net := {!net with report = (List.filter (fun (a,b) -> a <> e_id) ((e_id,e)::(!net).report))}
-    
+
+let add_ast (net:'a network ref) e_id ast_info =
+    let e = begin try Hashtbl.find (!net).states e_id
+    with Not_found -> raise (Element_not_found e_id)
+    end in begin
+    match e with
+        | STE(id,set,neg,strt,latch,connect,report,ast_id) ->
+            Hashtbl.replace (!net).states e_id (STE(id,set,neg,strt,latch,connect,report,ast_info::ast_id))
+        | Counter(id,target,behavior,report,connect,ast_id) ->
+            Hashtbl.replace (!net).states e_id (Counter(id,target,behavior,report,connect,ast_info::ast_id))
+        | Combinatorial(typ,id,eod,report,connect,ast_id) ->
+            Hashtbl.replace (!net).states e_id (Combinatorial(typ,id,eod,report,connect,ast_info::ast_id))
+    end
 (*Operations on Macros*)
 (*let m_create id input output = {
     id = id;
@@ -327,6 +339,98 @@ let element_to_ast_id e =
     | Combinatorial(_,_,_,_,_,ast_id) -> List.map (fun a -> (a,"boolean")) ast_id
     | Counter(_,_,_,_,_,ast_id) -> List.map (fun a -> (a,"counter")) ast_id
 
+let mnrl_element_to_str e =
+    let behavior_to_str behavior =
+        match behavior with
+            | Pulse -> "trigger"
+            | Latch -> "high"
+            | Roll -> "rollover"
+    in let start_to_str strt =
+        match strt with
+            | NotStart -> "onActivateIn"
+            | Start -> "onStartAndActivateIn"
+            | AllStart -> "always"
+    in let connection_id_to_str ((e,c) : 'a element_connection) =
+        let term = match c with
+            | None -> begin
+                match e with
+                    | STE(_,_,_,_,_,_,_,_) -> "i"
+                    | Combinatorial(typ,_,_,_,_,_) ->
+                        begin
+                        match typ with
+                            | Inverter
+                            | OR
+                            | AND
+                            | NAND
+                            | NOR -> "b0"
+                            | _ -> raise Malformed_connection
+                        end
+                    | _ -> raise Malformed_connection
+                end 
+            | Some x -> x in
+        match e with (*TODO Add lots of error-checking here*)
+            | STE(id,_,_,_,_,_,_,_) 
+            | Counter(id,_,_,_,_,_)
+            | Combinatorial(_,id,_,_,_,_) -> (id, term)
+    in let con_to_string conn =
+        let id,port = connection_id_to_str conn in
+        Printf.sprintf "                    {\n                        \"id\": \"%s\",\n                        \"portId\": \"%s\"\n                    }" id port
+    in let con_formatter children =
+        match children with
+            | [] -> ""
+            | hd :: tl -> List.fold_left (fun prev b -> prev ^ Printf.sprintf ",\n%s" (con_to_string b)) (con_to_string hd) tl 
+    in match e with
+        | STE(id,set,neg,strt,latch,connect,report,ast_id) -> begin
+            let set_to_str set =
+                if set = "*" then
+                    set
+                else
+                let c_list = Util.explode set in
+                let hex_escaped = List.fold_left (fun str x -> Printf.sprintf "%s\\\x%02x" str (Char.code x)) "" c_list in
+                if neg then
+                    Printf.sprintf "[^%s\\\x%x]" hex_escaped (Char.code start_of_input) (*(Char.code counter_trigger_char)*)
+                else "[" ^ hex_escaped ^ "]"
+            in
+            let rep_line =
+                if report then "            \"report\": true,\n" else "            \"report\": false,\n" in
+            let set_line = Printf.sprintf "                \"symbolSet\": \"%s\"\n" (set_to_str set) in
+            let latch_str = if latch then "                \"latched\": true,\n" else "                \"latched\": false,\n" in
+            Printf.sprintf "        {\n            \"id\": \"%s\",\n            \"enable\": \"%s\",\n%s            \"type\": \"hState\",\n" id (start_to_str strt) rep_line ^
+            Printf.sprintf "            \"inputDefs\": [ { \"portId\": \"i\", \"width\": 1 }],\n            \"outputDefs\": [\n                {\n                    \"portId\": \"o\",\n                    \"width\": 1,\n            \"activate\": [\n%s\n                    ]\n                }\n            ],\n"
+                (con_formatter connect.children) ^
+            Printf.sprintf "            \"attributes\": {\n%s%s            }\n        }" latch_str set_line 
+            end
+        | Counter(id,target,behavior,report,connect,ast_id) -> begin
+            let mode_line = Printf.sprintf "                \"mode\": \"%s\"\n" (behavior_to_str behavior) in
+            let threshold_line = Printf.sprintf "                \"threshold\": %d,\n" target in
+            let rep_line =
+                if report then "            \"report\": true,\n" else "            \"report\": false,\n" in
+            Printf.sprintf "        {\n            \"id\": \"%s\",\n            \"enable\": \"onActivateIn\",\n%s            \"type\": \"upCounter\",\n" id rep_line ^
+            Printf.sprintf "            \"inputDefs\": [ { \"portId\": \"cnt\", \"width\": 1 }, { \"portId\": \"rst\", \"width\": 1 } ],\n            \"outputDefs\": [\n                {\n                    \"portId\": \"o\",\n                    \"width\": 1,\n            \"activate\": [\n%s\n                    ]\n                }\n            ],\n"
+               (con_formatter connect.children) ^
+            Printf.sprintf "            \"attributes\": {\n%s%s            }\n        }" threshold_line mode_line  
+            end
+        | Combinatorial(typ,id,eod,report,connect,ast_id) ->
+            let comb_typ = match typ with
+                | Inverter -> "not"
+                | OR -> "or"
+                | AND -> "and"
+                | NAND -> "nand"
+                | NOR -> "nor"
+                | SOP -> "sum-of-products"
+                | POS -> "product-of-sums"
+                | NSOP -> "nsum-of-products"
+                | NPOS -> "nproduct-of-sums"
+            in
+            let mode_line = Printf.sprintf "                \"gateType\": \"%s\"\n" comb_typ in
+            let rep_line =
+                if report then "            \"report\": true,\n" else "            \"report\": false,\n" in
+            Printf.sprintf "        {\n            \"id\": \"%s\",\n            \"enable\": \"%s\",\n%s            \"type\": \"boolean\",\n" id (if eod then "onLast" else "onStartAndActivateIn") rep_line ^
+            Printf.sprintf "            \"inputDefs\": [ { \"portId\": \"b0\", \"width\": 1 } ],\n            \"outputDefs\": [\n                {\n                    \"portId\": \"o\",\n                    \"width\": 1,\n            \"activate\": [\n%s\n                    ]\n                }\n            ],\n"
+                (con_formatter connect.children) ^
+            Printf.sprintf "            \"attributes\": {\n%s            }\n        }" mode_line
+            
+
 let element_to_str e =
     let behavior_to_str behavior =
         match behavior with
@@ -377,7 +481,7 @@ let element_to_str e =
                 let c_list = Util.explode set in
                 let hex_escaped = List.fold_left (fun str x -> Printf.sprintf "%s\\x%02x" str (Char.code x)) "" c_list in
                 if neg then
-                    Printf.sprintf "[^%s\\x%x\\x%x]" hex_escaped (Char.code start_of_input) (Char.code counter_trigger_char)
+                    Printf.sprintf "[^%s\\x%x]" hex_escaped (Char.code start_of_input) (*(Char.code counter_trigger_char)*)
                 else "[" ^ hex_escaped ^ "]"
             in
             let rep_line =
@@ -430,6 +534,18 @@ let network_to_file (net:'a network ref) (channel:out_channel) =
     Hashtbl.iter (fun k e -> Printf.fprintf channel "%s" (element_to_str e)) (!net).states ;
     Printf.fprintf channel "</automata-network>"
 
+let mnrl_network_to_file (net:'a network ref) (channel:out_channel) =
+    Printf.printf "Automaton size: %d\n%!" (Hashtbl.length (!net).states);
+    Printf.fprintf channel "{\n    \"id\":\"%s\",\n" (!net).id  ;
+    Printf.fprintf channel "    \"nodes\": [\n";
+    let outs = ref [] in
+    Hashtbl.iter (fun k e -> outs := (mnrl_element_to_str e) :: !outs) (!net).states ;
+    begin match (List.rev !outs) with
+    | [] -> Printf.fprintf channel ""
+    | hd :: tl -> Printf.fprintf channel "%s" hd ; List.iter (fun e -> Printf.fprintf channel ",\n%s" e) tl
+    end ;
+    Printf.fprintf channel "\n    ]\n}"
+
 let networks_to_file (nets:('a network ref) list) (channel:out_channel) =
     assert (nets <> []);
     Printf.fprintf channel "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" ;
@@ -440,6 +556,22 @@ let networks_to_file (nets:('a network ref) list) (channel:out_channel) =
     ) 0 nets in
     Printf.printf "Automaton size: %d\n%!" size;
     Printf.fprintf channel "</automata-network>"
+
+let mnrl_networks_to_file (nets:('a network ref) list) (channel:out_channel) =
+    assert (nets <> []);
+    Printf.fprintf channel "{\n    \"id\":\"%s\",\n" !(List.hd nets).id  ;
+    Printf.fprintf channel "    \"nodes\": [\n";
+    let size = List.fold_left (fun size (net:'a network ref) ->
+        let outs = ref [] in
+        Hashtbl.iter (fun k e -> outs := (mnrl_element_to_str e) :: !outs) (!net).states ;
+        begin match (List.rev !outs) with
+        | [] -> Printf.fprintf channel ""
+        | hd :: tl -> Printf.fprintf channel "%s" hd ; List.iter (fun e -> Printf.fprintf channel ",\n%s" e) tl
+        end ;
+        size + (Hashtbl.length (!net).states);
+    ) 0 nets in
+    Printf.printf "Automaton size: %d\n%!" size;
+    Printf.fprintf channel "\n    ]\n}"
 
 let rec print_rec (e:'a element) =
     let _ = print_endline (element_to_str e) in

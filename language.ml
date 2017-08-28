@@ -128,10 +128,13 @@ type value =
     | ArrayValue of value option array
     | AbstractValue of Config.size * string * fake_value
     | AbstractChar of string * char
+    | DebugValue of string
     
 type container =
     | MacroContainer of macro
     | Variable of string * typ * value option
+    | DebugContainer of value
+    
 type 'a exp_return =
     | AutomataExp of 'a Automata.element list
     | CounterExp of (string list * int list * string * string)
@@ -179,6 +182,8 @@ let rec value_to_string (value:value option) =
                     "[]"
                 else 
                     "[" ^ List.fold_left (fun acc v -> acc ^ ", '" ^ (value_to_string v) ^ "'" ) ("'" ^ (value_to_string (List.hd l)) ^ "'") (List.tl l) ^ "]"
+        | CounterList(x) -> List.hd x
+        | DebugValue(s) -> s
         | _ -> "Abstract Value"
     end
     | _ -> "No Value"
@@ -339,7 +344,7 @@ and init_to_line a channel =
     | ArrayInit(a) -> List.iter (fun a -> init_to_line a channel) a
 
 and exp_to_line exp channel =
-    let line,_ = exp.loc in
+    let line,col = exp.loc in
     fprintf channel "%d\t%d\n" exp.id line;
     match exp.exp with
     | And(a,b)      
@@ -348,8 +353,8 @@ and exp_to_line exp channel =
     | Plus(a,b)     
     | Minus(a,b)   
     | Times(a,b)    
-    | Mod(a,b)
-    | EQ(a,b)       
+    | Mod(a,b) 
+    | EQ(a,b) 
     | NEQ(a,b)      
     | LEQ(a,b)      
     | GEQ(a,b)      

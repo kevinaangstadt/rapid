@@ -7,7 +7,7 @@
    Convert VASim Statevectors into Traces of RAPID line numbers
 """
 
-import argparse, csv, json
+import argparse, csv, json, copy
 
 def parse_tsv(filename):
     mapping = dict()
@@ -28,30 +28,53 @@ def process(filename, ste_to_ast, ast_to_line):
         offset = int(lines.pop(0).strip())
         num_stes = int(lines.pop(0).strip())
         data = list()
+        cnt_vals = dict()
         for i in range(num_stes):
             s_data = lines.pop(0).strip().split(",")
             ste = s_data[0]
-            val = s_data[1]
+            val = s_data[1].strip()
             if len(s_data) == 3:
                 port = s_data[2].split(":")
             else:
                 port = []
             for ast in ste_to_ast[ste]:
-                if ast["el_type"] is "counter":
+                
+                if ast["el_type"].strip() == "counter":
+                    # store the counter value
+                    cnt_vals[ste] = val
+                    if len(port) == 0:
+                        continue
                     if ast["port"] not in port:
-                        pass
+                        continue
+                
                 try:
                     lineno = int(ast_to_line[str(int(ast["ast_id"]))])
-                    data.append({
+                    #print ast["port"], val
+                    if(ast["port"] == "report" and val == "0"):
+                        continue
+                    elif(ast["port"] == "break" and val == "0"):
+                        continue
+                    elif ast["el_type"].strip() == "boolean":
+                        if ast["port"].strip() != "report" and ast["port"].strip() != "break":
+                            continue
+                    new_ast = copy.deepcopy(ast)
+                    new_entry = {
                         "ste" : ste,
-                        "ast" : ast,
+                        "ast" : new_ast,
                         "lineno" : lineno
-                    })
+                    }
+                    data.append(new_entry)
                 except KeyError as e:
                     print ast
                     print ast_to_line
                     exit(0)
-                
+        #print data
+        # update counter values
+        for entry in data:
+            #print entry['ast']['state']
+            for var_entry in entry['ast']['state']:
+                if 'value' in var_entry.keys() and var_entry['value'] in cnt_vals.keys():
+                    var_entry['value'] = cnt_vals[var_entry['value']]
         vec[offset] = data
     
     return vec

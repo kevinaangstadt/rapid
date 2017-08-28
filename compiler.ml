@@ -14,15 +14,24 @@ let val_to_string value =
     match value with
         | StringValue(s) -> s
         | IntValue(i) -> Printf.sprintf "%d" i
-        | CharValue(c) -> Printf.sprintf "%c" c
+        | CharValue(c) ->
+            let code = Char.code c in
+            if code = 10 then "\\\\n" else
+            if code = 9 then "\\\\t" else
+            if code < 32 || code > 126 then
+                Printf.sprintf "\\\\x%02x" code
+            else
+                Printf.sprintf "%c" c
         | BooleanValue(b) -> Printf.sprintf "%b" b
         | CounterList(_) -> "CounterList"
         | AbstractValue(_,s,_)
         | AbstractChar(s,_) -> s
+        | DebugValue(s) -> s
 
 let do_tiling = ref false
 
-let symbol_table : symbol = Hashtbl.create 255
+let symbol_table : symbol ref = ref (Hashtbl.create 255)
+let symbol_table_starter : symbol ref = ref (Hashtbl.create 255)
 
 let abstract_mapping : ((string,string) Hashtbl.t) ref = ref (Hashtbl.create 255)
 
@@ -32,9 +41,13 @@ let symbol_scope = ref StringSet.empty
 let counter_rename : (string,string) Hashtbl.t = Hashtbl.create 1000000
 let net = Automata.create "" ""
 
+(* Helper function to return a copy of the current symbol table *)
+let clone_symbol_table () =  
+    Hashtbl.copy !symbol_table
+
 let symbol_variable_lookup (v : string) =
     begin try
-    let var = Hashtbl.find symbol_table v in
+    let var = Hashtbl.find !symbol_table v in
         begin
         match var with
             | Variable(_,_,_) as return -> return
@@ -85,12 +98,17 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             if start_automaton then track_start := true ;
             (last, break)
         | Report ->
-            List.iter (fun s->return_list := StringSet.add s !return_list; evaluate_report s) last ;
+            List.iter (fun s->
+                return_list := StringSet.add s !return_list;
+                (* Add this AST Node to the debugging *)
+                Automata.add_ast net s (PortAST(stmt.id, "report", clone_symbol_table ())) ;
+                evaluate_report s
+            ) last ;
             track_start := false ;
             (last, break)
         | Break ->
             let brk = List.fold_left (fun brk s->
-                    let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                    let inv = Automata.Combinatorial(Automata.Inverter, "break_"^s, false, false, (Automata.generate_connections []), [PortAST(stmt.id, "break", clone_symbol_table ())]) in
                     Automata.add_element net inv;
                     Automata.connect net s (Automata.get_id inv) None ;
                     (Automata.get_id inv) :: brk
@@ -171,8 +189,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             (*if this is a counter experession*)
                 begin
                 (*Add in traps!*)
-                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
-                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
+                let no_trigger = Automata.STE(Printf.sprintf "%s_f" no,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
                 Automata.add_element net yes_trigger ;
                 Automata.add_element net no_trigger ;
                 Automata.connect net yes (Automata.get_id yes_trigger) None;
@@ -230,9 +248,9 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             match exp_return with
                 | AutomataExp(e_list) -> 
                     let end_of_exp = find_last e_list in
-                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false, [AST(exp.id, Hashtbl.copy symbol_table)]) in
-                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
-                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
+                    let spin = Automata.STE("spin_"^id, "*", false, Automata.NotStart, false, (Automata.generate_connections []), false, [AST(exp.id, clone_symbol_table ())]) in
+                    let spin_and = Automata.Combinatorial(Automata.AND, "spin_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, clone_symbol_table ())]) in
+                    let exp_and = Automata.Combinatorial(Automata.AND, "exp_and_"^id, false, false, (Automata.generate_connections []), [AST(exp.id, clone_symbol_table ())]) in
                     Automata.add_element net spin ;
                     Automata.add_element net spin_and;
                     Automata.add_element net exp_and;
@@ -289,17 +307,29 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                     List.fold_left (fun (new_last,b) c ->
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
-                        Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                        Hashtbl.add !symbol_table name (Variable(name,Char,Some c)) ;
                         let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                         (*remove binding*)
-                        Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk)
+                        Hashtbl.remove !symbol_table name ; (new_last @ return, b @ brk)
                     ) ([],[]) s
             | ArrayExp(a) ->
-                Array.fold_left (fun (new_last, b) (Some c) ->
-                    Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                let rec get_type typ =
+                    match typ with
+                        | Some(StringValue(_)) -> String
+                        | Some(IntValue(_)) -> Int
+                        | Some(CharValue(_))
+                        | Some(AbstractChar(_,_)) -> Char
+                        | Some(BooleanValue(_)) -> Boolean
+                        | Some(CounterList(_)) -> Counter
+                        | Some(ArrayValue(x)) -> Array(get_type x.(0))
+                        | _ -> failwith "Array exp type not found."
+                in
+                Array.fold_left (fun (new_last, b) ((Some c) as d) ->
+                    let v_typ = get_type d in
+                    Hashtbl.add !symbol_table name (Variable(name,v_typ,Some c)) ;
                     let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk )
+                    Hashtbl.remove !symbol_table name ; (new_last @ return, b @ brk )
                 ) ([],[]) a
             | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
@@ -312,14 +342,14 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                             | AbstractString(s) -> String.get s n
                             | _ -> failwith "should be unreachable"
                             in
-                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
+                            Hashtbl.add !symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                         | Array(x) ->
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
-                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
+                            Hashtbl.add !symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                     end ;
                     let return,brk = cgen_statement f (last,break) label ~start_automaton:start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; (new_last @ return, b @ brk)
+                    Hashtbl.remove !symbol_table name ; (new_last @ return, b @ brk)
                                        
                 ) ([],[]) n_array
                 
@@ -334,21 +364,50 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             match obj with
             | StringExp(s) ->
                 let s = explode s in
-                    List.fold_left (fun (last, b) c ->
+                    let (new_last, new_break, _) =
+                    List.fold_left (fun (last, b, seen_so_far) c ->
                         let c = CharValue(c) in
                         (*set binding to 'name'*)
-                        Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                        Hashtbl.add !symbol_table name (Variable(name,Char,Some c)) ;
+                        (* This is a hack to get debugging info looking good *)
+                        let so_far_name = Printf.sprintf "__RAPID_FOREACH_SEEN_%s" name in
+                        Hashtbl.add !symbol_table so_far_name (DebugContainer(DebugValue(seen_so_far))) ;
                         let return,brk = cgen_statement f (last, b) label ~start_automaton:!start_of_automaton in
                         (*remove binding*)
-                        Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return, brk)
-                    ) (last,break) s
+                        Hashtbl.remove !symbol_table name ;
+                        Hashtbl.remove !symbol_table so_far_name ;
+                        start_of_automaton := false ;
+                        (return, brk, (seen_so_far ^ (val_to_string c)))
+                    ) (last,break,"") s in
+                    (new_last,new_break)
             | ArrayExp(a) ->
-                Array.fold_left (fun (last, b) (Some c) ->
-                    Hashtbl.add symbol_table name (Variable(name,Char,Some c)) ;
+                let rec get_type typ =
+                    match typ with
+                        | Some(StringValue(_)) -> String
+                        | Some(IntValue(_)) -> Int
+                        | Some(CharValue(_))
+                        | Some(AbstractChar(_,_)) -> Char
+                        | Some(BooleanValue(_)) -> Boolean
+                        | Some(CounterList(_)) -> Counter
+                        | Some(ArrayValue(x)) -> Array(get_type x.(0))
+                        | _ -> failwith "Array exp type not found."
+                in
+                let (new_last, new_break, _) = Array.fold_left (fun (last, b, seen_so_far) ((Some c) as d) ->
+                    let v_typ = get_type d in
+                    Hashtbl.add !symbol_table name (Variable(name,v_typ,Some c)) ;
+                    
+                    (* This is a hack to get debugging info looking good *)
+                    let so_far_name = Printf.sprintf "__RAPID_FOREACH_SEEN_%s" name in
+                    Hashtbl.add !symbol_table so_far_name (DebugContainer(DebugValue(seen_so_far))) ;
+                    
                     let return,brk = cgen_statement f (last, b) label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return,brk)
-                ) (last,break) a
+                    Hashtbl.remove !symbol_table name ;
+                    Hashtbl.remove !symbol_table so_far_name ;
+                    start_of_automaton := false ;
+                    (return,brk,seen_so_far ^ ", " ^ (val_to_string c))
+                ) (last,break, "") a in
+                (new_last, new_break)
             | AbstractExp((n,abstract_typ),pre,t,fake) ->
                 let n_array = Array.init n (fun n -> n) in
                 Array.fold_left (fun (last,b) n ->
@@ -360,14 +419,14 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                                 | AbstractString(s) -> String.get s n
                                 | _ -> failwith "should be unreachable"
                             in
-                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
+                            Hashtbl.add !symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                         | Array(x) ->
                             let (Config.ArrayInfo(new_size)) = abstract_typ in
-                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,NoValue))))
+                            Hashtbl.add !symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,NoValue))))
                     end ;
                     let return,brk = cgen_statement f (last,b) label ~start_automaton:!start_of_automaton in
                     (*remove binding*)
-                    Hashtbl.remove symbol_table name ; start_of_automaton := false ; (return, brk)
+                    Hashtbl.remove !symbol_table name ; start_of_automaton := false ; (return, brk)
                                        
                 ) (last,break) n_array
             (* TODO add some sort of array exp*)
@@ -388,7 +447,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                 in
                 (* TODO We need some notion of scope to remove these after the fact! *)
                 let Variable(id,typ,_) = symbol_variable_lookup n in
-                Hashtbl.add symbol_table id (Variable(id,typ,value)) ;
+                Hashtbl.add !symbol_table id (Variable(id,typ,value)) ;
                 symbol_scope := StringSet.add id !symbol_scope ;
             | _ -> failwith "array assignment not supported atm"
             end
@@ -421,8 +480,8 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                         let num = get_num c_seed in
                         let id = Printf.sprintf "%s_%s_%d" label dec.var num in
                         let i_id = Printf.sprintf "%s_i" id in
-                        let counter = Automata.Counter(id,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let counter = Automata.Counter(id,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
+                        let inverter = Automata.Combinatorial(Inverter,i_id, false, false, (Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id ;
                         (*Hashtbl.add symbol_table dec.var (Variable(id,dec.typ,None)) ;*)
@@ -446,19 +505,19 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                         let i_id2 = Printf.sprintf "%s_i" id2 in
                         let id_true = Printf.sprintf "%s_true" id1 in
                         let id_false = Printf.sprintf "%s_false" id1 in
-                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
-                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, (Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)]) in
+                        let counter1 = Automata.Counter(id1,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
+                        let counter2 = Automata.Counter(id2,100,Automata.Latch,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
+                        let inverter1 = Automata.Combinatorial(Inverter,i_id1, false, false, (Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
+                        let inverter2 = Automata.Combinatorial(Inverter,i_id2, false, false, (Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())]) in
                         let out_true = if is_eq then
-                            Automata.Combinatorial(AND,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(AND,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())])
                         else
-                            Automata.Combinatorial(OR,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(OR,id_true,false,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())])
                         in
                         let out_false = if is_eq then
-                            Automata.Combinatorial(AND,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(AND,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())])
                         else
-                            Automata.Combinatorial(OR,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, Hashtbl.copy symbol_table)])
+                            Automata.Combinatorial(OR,id_false,false,false,(Automata.generate_connections []), [AST(stmt.id, clone_symbol_table ())])
                         in
                         (*Add to symbol table*)
                         Hashtbl.add counter_rename dec.var id1 ;
@@ -491,7 +550,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                             | Some i -> gen_value i
                         in (dec.var,x) in
                 (* TODO We need some notion of scope to remove these after the fact! *)
-                Hashtbl.add symbol_table id (Variable(id,dec.typ,value)) ;
+                Hashtbl.add !symbol_table id (Variable(id,dec.typ,value)) ;
                 symbol_scope := StringSet.add id !symbol_scope ;
             ) var ;
             if start_automaton then track_start := true ;
@@ -503,7 +562,7 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
             (* TODO does this need to be error-checked? *)
             let start_of_automaton = (Automata.is_start_empty net) || start_automaton || !track_start in
             track_start := false ;
-            let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find symbol_table a in
+            let (MacroContainer(Macro(name,Parameters(params),stmts) as m)) = Hashtbl.find !symbol_table a in
                 (*evaluate macro*)
                 (*FIXME break can't go over macro bound*)
                 (cgen_macro m b last ~start_automaton:start_of_automaton, [])
@@ -533,6 +592,16 @@ let rec cgen_statement ?(start_automaton=false) (stmt : statement) ((last, break
                     let return = cgen_expression e (Some (List.map (fun l -> Automata.get_element net l) last)) None label (new_seed ()) in
                     match return with
                         | BooleanExp(false) -> ([], break)
+                        | CounterExp(c_list,n_list,yes,no) ->
+                            (*if this is a counter experession*)
+                            begin
+                            (*Add in traps!*)
+                            let yes_trigger = Automata.STE(Printf.sprintf "%s_t" yes,String.make 1 Automata.counter_trigger_char,false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(stmt.id, clone_symbol_table ())]) in
+                            Automata.add_element net yes_trigger ;
+                            Automata.connect net yes (Automata.get_id yes_trigger) None;
+                            List.iter2 (fun c n -> Automata.set_count net c n ) c_list n_list ;
+                            ([Automata.get_id yes_trigger], break)
+                            end
                         | _ -> (last, break)
                     end
             end
@@ -556,7 +625,7 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
         begin
         match v.exp with
             | Lval((n,o)) ->
-                let (Variable(name,typ,Some v)) = Hashtbl.find symbol_table n in
+                let (Variable(name,typ,Some v)) = Hashtbl.find !symbol_table n in
                 begin
                 match o with
                 | NoOffset ->
@@ -580,10 +649,10 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
             end in
             if a.exp = Input then
                 (*FIXME getting rid of Char.escaped...not sure of the impacts of this*)
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value a),false,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
                 helper new_element
 
             else raise (Syntax_error "Something with Input")
@@ -597,10 +666,10 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                         [Automata.STE(id,set,neg,strt,latch,(Automata.generate_connections (cons@connect.children)),report,ast_id)]
             end in
             if a.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c" (get_value b),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
                 helper new_element
             else if b.exp = Input then
-                let new_element = Automata.STE(id,Printf.sprintf "%c"(get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, Hashtbl.copy symbol_table)]) in
+                let new_element = Automata.STE(id,Printf.sprintf "%c"(get_value a),true,Automata.NotStart,false,(Automata.generate_connections []),false,[AST(exp.id, clone_symbol_table ())]) in
                 helper new_element
             else raise (Syntax_error "Something with Input")
             end
@@ -712,7 +781,7 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
             in
-            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect),[AST(exp.id, Hashtbl.copy symbol_table)]) in
+            let join = Automata.Combinatorial(Automata.AND,Printf.sprintf "%s_and_%d" prefix (get_num seed), false, false, (Automata.generate_connections connect),[AST(exp.id, clone_symbol_table ())]) in
             let a_eval = cgen_expression_aut a None (Some [join]) prefix seed in
             let b_eval = cgen_expression_aut b None (Some [join]) prefix seed in
                 a_eval@b_eval
@@ -741,20 +810,20 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false,[AST(a.id,Hashtbl.copy symbol_table);AST(b.id, Hashtbl.copy symbol_table)])]
+                    in [Automata.STE(id,Printf.sprintf "%s" ((build_charset a)^(build_charset b)),false, Automata.NotStart, false, (Automata.generate_connections connect), false,[AST(a.id,clone_symbol_table ());AST(b.id, clone_symbol_table ())])]
                 else
                 let b_eval = cgen_expression_aut b None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(a.id, Hashtbl.copy symbol_table)]) :: b_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset a)),false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(a.id, clone_symbol_table ())]) :: b_eval
             else
                 if can_condense b then
                 let a_eval = cgen_expression_aut a None s prefix seed in
                     let connect = match s with
                         | None -> []
                         | Some x -> List.map (fun a -> (a,None)) x
-                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(b.id, Hashtbl.copy symbol_table)]) :: a_eval
+                    in Automata.STE(id,Printf.sprintf "%s" ((build_charset b)), false, Automata.NotStart, false, (Automata.generate_connections connect), false, [AST(b.id, clone_symbol_table ())]) :: a_eval
                 else
                     let a_eval = cgen_expression_aut a None s prefix seed in
                     let b_eval = cgen_expression_aut b None s prefix seed in
@@ -764,7 +833,7 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                 | "count" ->
                     begin
                     (*let id = Hashtbl.find counter_rename a in*)
-                    let counter = Hashtbl.find symbol_table a in
+                    let counter = Hashtbl.find !symbol_table a in
                     let last = match before with Some x -> x | _ -> [] in
                     
                     match counter with
@@ -772,13 +841,11 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                             let c_list = match v with
                                 | Some CounterList(x) -> x in
                             begin
+
                             List.iter ( fun  c ->
                                 (* Update so that we have debugging info for counts *)
-                                let (Automata.Counter(id,b,c,d,e,ast_list) as old_c) = Automata.get_element net c in
-                                let new_c = Automata.Counter(id,b,c,d,e,PortAST(exp.id, "cnt", Hashtbl.copy symbol_table)::ast_list) in
-                                Automata.remove_element net id ;
-                                Automata.add_element net new_c ;
-                                List.iter (fun l -> Automata.connect net (Automata.get_id l) id (Some "cnt")) last
+                                Automata.add_ast net c (PortAST(exp.id, "cnt", clone_symbol_table ()));
+                                List.iter (fun l -> Automata.connect net (Automata.get_id l) c (Some "cnt")) last
                             ) c_list ; []
                             
                             end
@@ -787,7 +854,7 @@ and cgen_expression_aut (exp : expression) (before : 'a Automata.element list op
                 | "reset" ->
                     begin
                     (*let id = Hashtbl.find counter_rename a in*)
-                    let counter = Hashtbl.find symbol_table a in
+                    let counter = Hashtbl.find !symbol_table a in
                     let last = match before with Some x -> x | _ -> [] in
                     match counter with
                         | Variable(s,t,v) ->
@@ -812,7 +879,7 @@ and evaluate_counter_expression (exp : expression) =
         match v.exp with
             | Lval((a,_)) ->
                 let id = Hashtbl.find counter_rename a in
-                let (Variable(name,typ, Some (CounterList(e)))) = Hashtbl.find symbol_table a in
+                let (Variable(name,typ, Some (CounterList(e)))) = Hashtbl.find !symbol_table a in
                     e
                 
         end in
@@ -866,8 +933,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,(Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
-            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,(Automata.generate_connections []), [AST(exp.id, Hashtbl.copy symbol_table)]) in
+            let yes_and = Automata.Combinatorial(Automata.AND,yes,false,false,(Automata.generate_connections []), [AST(exp.id, clone_symbol_table ())]) in
+            let no_or = Automata.Combinatorial(Automata.OR,no,false,false,(Automata.generate_connections []), [AST(exp.id, clone_symbol_table ())]) in
                 Automata.add_element net yes_and ;
                 Automata.add_element net no_or ;
                 Automata.connect net a_yes yes None ;
@@ -880,8 +947,8 @@ and evaluate_counter_expression (exp : expression) =
             let b_c_list,b_n_list,b_yes,b_no = evaluate_counter_expression b in
             let yes = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "yes" (a_c_list@b_c_list) in
             let no = List.fold_left (fun last c -> Printf.sprintf "%s_%s" last c) "no" (a_c_list@b_c_list) in
-            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,(Automata.generate_connections []),[AST(exp.id, Hashtbl.copy symbol_table)]) in
-            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,(Automata.generate_connections []),[AST(exp.id, Hashtbl.copy symbol_table)]) in
+            let yes_or = Automata.Combinatorial(Automata.OR,yes,false,false,(Automata.generate_connections []),[AST(exp.id, clone_symbol_table ())]) in
+            let no_and = Automata.Combinatorial(Automata.AND,no,false,false,(Automata.generate_connections []),[AST(exp.id, clone_symbol_table ())]) in
                 Automata.add_element net yes_or ;
                 Automata.add_element net no_and ;
                 Automata.connect net a_yes yes None ;
@@ -1054,6 +1121,8 @@ and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (a
     let return_backup = !return_list in
     return_list := StringSet.empty ;
     symbol_scope := StringSet.empty ;
+    let st_bak = !symbol_table in
+    symbol_table := !symbol_table_starter ;
     List.iter2 (fun (Param(p,t)) arg ->
         let value =
             begin
@@ -1061,7 +1130,7 @@ and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (a
             (*TODO ALLOW ARBITRARY EXPRESSIONS*)
             match arg.exp with
                 | Lval((s,o2)) ->
-                    let variable = Hashtbl.find symbol_table s in
+                    let variable = Hashtbl.find st_bak s in
                     begin
                     match variable with
                         | Variable(name,t,value) ->
@@ -1101,7 +1170,7 @@ and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (a
                 | '+' -> '_'
                 | _ -> c
         ) (val_to_string v)) ;*) 
-        Hashtbl.add symbol_table p (Variable(p,t,value))
+        Hashtbl.add !symbol_table p (Variable(p,t,value))
     ) params args ;
     (* verify that we have a block; evalutate it *)
     
@@ -1116,9 +1185,10 @@ and cgen_macro ?(start_automaton=false) (Macro(name,Parameters(params),stmt)) (a
             | Counter -> Hashtbl.remove counter_rename p
             | _ -> ()
         end;
-        Hashtbl.remove symbol_table p) params ;
-    StringSet.iter(fun s -> Hashtbl.remove symbol_table s) !symbol_scope ;
+        Hashtbl.remove !symbol_table p) params ;
+    StringSet.iter(fun s -> Hashtbl.remove !symbol_table s) !symbol_scope ;
     symbol_scope := scope_backup ;
+    symbol_table := st_bak ;
     let return : string list =
         if StringSet.is_empty !return_list then last
         else
@@ -1132,8 +1202,10 @@ let compile (Program(macros,network)) config name =
         
     (* Add the macros to the symbol table *)
     List.iter (fun ((Macro(name,params,stmts)) as m) ->
-                    Hashtbl.add symbol_table name (MacroContainer(m))) macros
+                    Hashtbl.add !symbol_table name (MacroContainer(m))) macros
     ;
+    (* store backup symbol table *)
+    symbol_table_starter := clone_symbol_table () ;
     match network with
         | Network((Parameters(params)),({stmt=(Block(b)); id=ast_id})) -> begin
             (*Add params to symbol_table*)
@@ -1144,7 +1216,7 @@ let compile (Program(macros,network)) config name =
                         | String -> AbstractString(make_string size)
                         | _ -> NoValue
                     in
-                    Hashtbl.add symbol_table n (Variable(n,t,Some (AbstractValue(a_val,n,fake))))
+                    Hashtbl.add !symbol_table n (Variable(n,t,Some (AbstractValue(a_val,n,fake))))
                 with Not_found ->
                     raise (Config_error(Printf.sprintf "No configuration provided for variable \"%s\".\n" n))
             ) params ;
@@ -1170,19 +1242,19 @@ let compile (Program(macros,network)) config name =
                                             | AbstractString(s) -> String.get s n
                                             | _ -> failwith "should be unreachable"
                                             in
-                                            Hashtbl.add symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
+                                            Hashtbl.add !symbol_table name (Variable(name,Char,Some (AbstractChar(new_pre,c))))
                                         | Array(x) ->
                                             let (Config.ArrayInfo((new_size_int,_) as new_size)) = abstract_typ in
                                             let fake = match x with
                                                 | String -> AbstractString(make_string new_size_int)
                                                 | _ -> fake
                                             in
-                                            Hashtbl.add symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
+                                            Hashtbl.add !symbol_table name (Variable(name,x,Some (AbstractValue(new_size,new_pre,fake))))
                                     end ;
                                     (* FIXME is throwing away break correct? *)
                                     let (return,_) = cgen_statement f ([],[]) "" ~start_automaton:true in
                                     (*remove binding*)
-                                    Hashtbl.remove symbol_table name
+                                    Hashtbl.remove !symbol_table name
                                     end
                                 in
                                 let rec tiling_optimizer num_blocks n =

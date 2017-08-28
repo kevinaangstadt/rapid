@@ -112,7 +112,8 @@ let process (lexbuf : Lexing.lexbuf) config =
     in
         if !intermediate = "" then
             (*print_endline (Language.program_to_str program_i) ;*)
-            ( (Compiler.compile program_i config net_name), program_t)
+            let (anml,_ ) as c = Compiler.compile program_i config net_name in
+            ( c, program_t)
             
             (*print_endline (Language.program_to_str program) ; *)  (**)
         else
@@ -169,12 +170,14 @@ let set_config new_c = config := new_c in
 
 let merge = ref false in
 let debug = ref false in
+let mnrl = ref false in
 
 let argspec = [
-        ("-o", Arg.String (set_out), "filename Names output file; a.anml by default" );
+        ("-o", Arg.String (set_out), "filename Names output file; a.anml/mnrl by default" );
         ("-c", Arg.String (set_config), "config_file Provides variable configuration for network");
         ("-i", Arg.String (set_intermediate), "filename Write intermediate RAPID to filename");
         ("-g", Arg.Set debug, " Enable debugging output");
+        ("--mnrl", Arg.Set mnrl, " Generate MNRL instead of ANML");
         ("--tiling", Arg.Set Compiler.do_tiling, " Enable tiling optimization");
         ("--merge", Arg.Set merge, " Combine output into single ANML file") ;
         ("--verbose-lexing", Arg.Set Lex.enable_verbose, " Enable verbose lexing")
@@ -190,20 +193,27 @@ let argspec = Arg.align argspec in
         if String.length !config = 0 then []
         else read_config !config
     in
+    if !output = "a.anml" && !mnrl then output := "a.mnrl" else output := !output;
     let ((anml,abstract_mapping), ast) = read_file !file config in
     try
         if not !merge then
             begin
             List.iteri (fun i a ->
                 let channel = open_out (Printf.sprintf "%d.%s" i !output) in
-                (Automata.network_to_file a channel) ;
+                if !mnrl then
+                    Automata.mnrl_network_to_file a channel
+                else
+                    (Automata.network_to_file a channel) ;
                 close_out channel
             ) anml
             end
         else
         begin
             let channel = open_out !output in
-            Automata.networks_to_file anml channel ;
+            if !mnrl then
+                Automata.mnrl_networks_to_file anml channel
+            else
+                Automata.networks_to_file anml channel ;
             close_out channel
         end
         ;
